@@ -138,6 +138,7 @@ function dashboardPage( noOrder, sticky, blockPointer, flaky, narrow ) {
 		<div class="card-body"><ul class="dashboard-meals-list"></ul></div>
 	</div>
 	<div id="sideBar"></div>
+	<div id="mealModal"></div>
 	<script>
 		var STICKY = ${ JSON.stringify( Boolean( sticky ) ) };
 		var FLAKY = ${ JSON.stringify( Boolean( flaky ) ) };
@@ -204,12 +205,17 @@ function dashboardPage( noOrder, sticky, blockPointer, flaky, narrow ) {
 					'<div class="nutrition-summary__item">' + meal[ 3 ] + 'kcal</div></div></div>';
 				li.querySelector( '.meal-content' ).addEventListener( 'click', function () {
 					var raw = DETAILS[ meal[ 0 ] ];
-					var sidebar = document.getElementById( 'sideBar' );
 
+					// Bez rozpoznanej struktury panel korzysta z bocznego #sideBar -
+					// sprawdzamy wtedy sciezke zapasowa z surowym tekstem.
 					if ( ! raw ) {
-						sidebar.innerHTML = '<div>' + meal[ 2 ] + '</div>';
+						document.getElementById( 'sideBar' ).innerHTML = '<div>' + meal[ 2 ] + '</div>';
 						return;
 					}
+
+					// Pelne szczegoly ida do osobnego okna, jak w prawdziwym panelu,
+					// gdzie #sideBar istnieje i pozostaje pusty.
+					var sidebar = document.getElementById( 'mealModal' );
 
 					// Struktura 1:1 z prawdziwego okna szczegolow posilku.
 					sidebar.innerHTML =
@@ -228,7 +234,10 @@ function dashboardPage( noOrder, sticky, blockPointer, flaky, narrow ) {
 		}
 
 		document.addEventListener( 'keydown', function ( event ) {
-			if ( 'Escape' === event.key ) { document.getElementById( 'sideBar' ).innerHTML = ''; }
+			if ( 'Escape' === event.key ) {
+				document.getElementById( 'mealModal' ).innerHTML = '';
+				document.getElementById( 'sideBar' ).innerHTML = '';
+			}
 		} );
 
 		// Otwierac mozna kazdy dzien z etykieta - takze ten z klasa is-disabled,

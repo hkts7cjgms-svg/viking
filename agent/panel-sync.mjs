@@ -752,15 +752,29 @@ async function openMealDetails( page, card, timeout ) {
 	return null;
 }
 
+/**
+ * Czeka na okno ze skladnikami.
+ *
+ * UWAGA: nie wolno tu uzyc selektora ".details-ingredients, #sideBar".
+ * querySelector oddaje PIERWSZY pasujacy element w kolejnosci dokumentu, a
+ * #sideBar istnieje na stronie od zawsze i bywa pusty - czekaloby sie wiec na
+ * tresc w pustym pudelku, podczas gdy okno ze skladnikami stoi obok.
+ */
 function waitForDetails( page, timeout ) {
 	return page
 		.waitForFunction(
-			( selector ) => {
-				var node = document.querySelector( selector );
+			() => {
+				var ingredients = document.querySelector( '.details-ingredients' );
 
-				return Boolean( node ) && node.textContent.trim().length > 0;
+				if ( ingredients && ingredients.textContent.trim().length > 0 ) {
+					return true;
+				}
+
+				var sidebar = document.querySelector( '#sideBar' );
+
+				return Boolean( sidebar ) && sidebar.textContent.trim().length > 0;
 			},
-			SELECTORS.details,
+			undefined,
 			{ timeout }
 		)
 		.then( () => true )
