@@ -1,0 +1,12 @@
+{
+  "name": "kuchnia-vikinga-wydarzenia",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Wydarzenia w opisach posiłków — wtyczka WordPressa, REST API i narzędzia agenta.",
+  "scripts": {
+    "test": "bash tests/run.sh"
+  },
+  "devDependencies": {
+    "jsdom": "^30.0.1"
+  }
+}

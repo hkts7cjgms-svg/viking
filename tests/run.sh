@@ -26,3 +26,7 @@ node tests/cli.test.mjs
 echo
 echo "== serwer MCP na atrapie API =="
 node tests/mcp.test.mjs
+
+echo
+echo "== wstrzykiwacz do panelu klienta =="
+node tests/panel-events.test.mjs

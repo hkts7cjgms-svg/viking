@@ -22,6 +22,48 @@ final class RestController {
 
 	public function register(): void {
 		add_action( 'rest_api_init', array( $this, 'register_routes' ) );
+		add_filter( 'rest_post_dispatch', array( $this, 'send_cors_headers' ), 10, 3 );
+	}
+
+	/**
+	 * Naglowki CORS wylacznie dla tras kv/v1.
+	 *
+	 * Panel klienta stoi na innej domenie niz WordPress, wiec bez tego przegladarka
+	 * odrzuci odpowiedz. Wpuszczamy tylko domeny z ustawien i tylko odczyt - stad
+	 * brak Allow-Credentials: zapis przez przegladarke z obcej domeny ma nie dzialac.
+	 *
+	 * @param \WP_REST_Response $response Odpowiedz.
+	 * @param \WP_REST_Server   $server   Serwer REST.
+	 * @param \WP_REST_Request  $request  Zadanie.
+	 *
+	 * @return \WP_REST_Response
+	 */
+	public function send_cors_headers( $response, $server, $request ) {
+		unset( $server );
+
+		if ( ! $response instanceof \WP_REST_Response || ! $request instanceof \WP_REST_Request ) {
+			return $response;
+		}
+
+		if ( ! str_starts_with( ltrim( (string) $request->get_route(), '/' ), self::REST_NAMESPACE . '/' ) ) {
+			return $response;
+		}
+
+		// Vary ustawiamy zawsze, zeby cache nie podal odpowiedzi z cudzym Origin.
+		$response->header( 'Vary', 'Origin', false );
+
+		$origin = (string) $request->get_header( 'origin' );
+
+		if ( '' === $origin || ! in_array( $origin, Settings::cors_origins(), true ) ) {
+			return $response;
+		}
+
+		$response->header( 'Access-Control-Allow-Origin', $origin );
+		$response->header( 'Access-Control-Allow-Methods', 'GET, OPTIONS' );
+		$response->header( 'Access-Control-Allow-Headers', 'Content-Type' );
+		$response->header( 'Access-Control-Max-Age', '600' );
+
+		return $response;
 	}
 
 	public function register_routes(): void {

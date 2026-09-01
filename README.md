@@ -14,7 +14,8 @@ pojawia się przy obiedzie tego dnia, sam znika dzień później.
 | `agent/kv-events.mjs` | CLI do zarządzania wydarzeniami z terminala lub crona |
 | `agent/mcp-server.mjs` | Serwer MCP — asystent zarządza wydarzeniami sam, bez panelu |
 | `tests/` | Testy: logika dat w PHP, CLI i MCP na atrapie API |
-| `docs/` | [Instalacja](docs/INSTALACJA.md) i [opis API](docs/API.md) |
+| `plugin/…/assets/panel-events.js` | Wstrzykiwacz wydarzeń do panelu klienta (przez GTM) |
+| `docs/` | [Instalacja](docs/INSTALACJA.md), [API](docs/API.md), [panel klienta](docs/PANEL-KLIENTA.md) |
 
 ## Jak to działa
 
@@ -67,11 +68,24 @@ node agent/kv-events.mjs rm 123
 Ten sam zestaw operacji jako serwer MCP — po podpięciu asystent dodaje, zmienia
 i usuwa wydarzenia sam. Konfiguracja w [docs/INSTALACJA.md](docs/INSTALACJA.md#agent-mcp).
 
+## Dwa miejsca, dwie drogi
+
+Jadłospis żyje w dwóch niezależnych systemach i każdy wymaga czego innego:
+
+| Gdzie | Co to jest | Jak tam trafiają wydarzenia |
+| --- | --- | --- |
+| `kuchniavikinga.pl` | WordPress, motyw `viking` | wtyczka — filtr w motywie, skrypt albo shortcode |
+| `panel.kuchniavikinga.pl` | panel klienta, aplikacja zewnętrznego dostawcy | skrypt przez Google Tag Managera + REST API wtyczki |
+
+W obu przypadkach wydarzenia dodaje się w jednym miejscu — w panelu WordPressa albo
+przez API. Szczegóły drugiej drogi i jej ograniczenia: [docs/PANEL-KLIENTA.md](docs/PANEL-KLIENTA.md).
+
 ## Testy
 
 ```bash
+npm install      # jednorazowo, dla jsdom
 bash tests/run.sh
 ```
 
-Sprawdzają składnię wszystkich plików, logikę dopasowania dat (33 asercje) oraz
-CLI i serwer MCP na atrapie API (27 asercji) — bez potrzeby stawiania WordPressa.
+91 asercji: logika dopasowania dat w czystym PHP, CLI i serwer MCP na atrapie API oraz
+wstrzykiwacz do panelu na fragmencie prawdziwego HTML-a — bez stawiania WordPressa.

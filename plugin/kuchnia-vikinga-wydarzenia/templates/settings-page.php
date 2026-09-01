@@ -133,6 +133,18 @@ $kv_option = Settings::OPTION;
 				</td>
 			</tr>
 			<tr>
+				<th scope="row"><label for="kv_cors_origins"><?php esc_html_e( 'Domeny czytające API', 'kv-wydarzenia' ); ?></label></th>
+				<td>
+					<input type="text" class="large-text code" id="kv_cors_origins"
+						name="<?php echo esc_attr( $kv_option ); ?>[cors_origins]"
+						value="<?php echo esc_attr( implode( ', ', (array) $settings['cors_origins'] ) ); ?>"
+						placeholder="https://panel.kuchniavikinga.pl">
+					<p class="description">
+						<?php esc_html_e( 'Adresy https po przecinku. Potrzebne, gdy wydarzenia mają się pokazywać w panelu klienta, który stoi na innej domenie. Dotyczy wyłącznie odczytu.', 'kv-wydarzenia' ); ?>
+					</p>
+				</td>
+			</tr>
+			<tr>
 				<th scope="row"><label for="kv_wrapper_class"><?php esc_html_e( 'Klasa CSS', 'kv-wydarzenia' ); ?></label></th>
 				<td>
 					<input type="text" class="regular-text code" id="kv_wrapper_class"

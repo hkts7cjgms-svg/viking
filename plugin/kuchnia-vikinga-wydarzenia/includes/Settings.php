@@ -44,6 +44,8 @@ final class Settings {
 			// Strony (slugi), na ktorych ladujemy skrypt trybu 'js'. Pusto = wszedzie.
 			'js_pages'      => array(),
 			'wrapper_class' => 'kv-wydarzenia',
+			// Domeny, ktore moga czytac API z przegladarki (panel klienta jest na innej domenie).
+			'cors_origins'  => array( 'https://panel.kuchniavikinga.pl' ),
 		);
 	}
 
@@ -149,7 +151,64 @@ final class Settings {
 			'js_diet_attr'  => $this->sanitize_attr_name( $input['js_diet_attr'] ?? '', 'data-kv-diet' ),
 			'js_pages'      => EventMatcher::normalize_slug_list( $input['js_pages'] ?? array() ),
 			'wrapper_class' => $this->sanitize_css_class( $input['wrapper_class'] ?? '', 'kv-wydarzenia' ),
+			'cors_origins'  => $this->sanitize_origins( $input['cors_origins'] ?? array() ),
 		);
+	}
+
+	/**
+	 * Lista dozwolonych origin-ow. Tylko https i sam schemat + host, bez sciezki.
+	 *
+	 * @param mixed $value Surowa lista.
+	 *
+	 * @return string[]
+	 */
+	private function sanitize_origins( $value ): array {
+		if ( is_string( $value ) ) {
+			$value = preg_split( '/[,\r\n\s]+/', $value ) ?: array();
+		}
+
+		if ( ! is_array( $value ) ) {
+			return array();
+		}
+
+		$origins = array();
+
+		foreach ( $value as $item ) {
+			if ( ! is_scalar( $item ) ) {
+				continue;
+			}
+
+			$origin = trim( (string) $item );
+
+			if ( '' === $origin ) {
+				continue;
+			}
+
+			$parts = wp_parse_url( $origin );
+
+			if ( empty( $parts['scheme'] ) || empty( $parts['host'] ) || 'https' !== $parts['scheme'] ) {
+				continue;
+			}
+
+			$normalized = 'https://' . strtolower( $parts['host'] );
+
+			if ( ! empty( $parts['port'] ) ) {
+				$normalized .= ':' . (int) $parts['port'];
+			}
+
+			$origins[ $normalized ] = true;
+		}
+
+		return array_keys( $origins );
+	}
+
+	/**
+	 * @return string[]
+	 */
+	public static function cors_origins(): array {
+		$origins = self::get( 'cors_origins' );
+
+		return is_array( $origins ) ? $origins : array();
 	}
 
 	/**
