@@ -24,6 +24,9 @@ const SELECTORS = {
 	user: '#username',
 	password: '#password',
 	submit: 'button[type="submit"]',
+	// Pulpit poznajemy po nawigacji, nie po kalendarzu - kalendarz pojawia sie
+	// pozniej, a przy braku aktywnego zamowienia moze nie pojawic sie wcale.
+	dashboard: '.navigation, #pageHeader, .app-content, .calendar-slider-items',
 	mealContent: '.meal-content',
 	mealCard: 'ul.dashboard-meals-list > li.enhanced-meal-card',
 	calendar: '.calendar-slider-items',
@@ -88,6 +91,7 @@ export async function withPanel( options, callback ) {
 
 		if ( await isLoggedIn( page, timeout ) ) {
 			log( 'Sesja z poprzedniego uruchomienia nadal ważna — logowanie pominięte.' );
+			await waitForCalendar( page, Math.min( timeout, 20000 ), log );
 		} else {
 			await login( page, { panelUrl, user: options.user, password: options.password, timeout, log } );
 		}
@@ -108,14 +112,39 @@ export async function withPanel( options, callback ) {
  */
 async function isLoggedIn( page, timeout ) {
 	try {
-		await page.waitForSelector( `${ SELECTORS.calendar }, ${ SELECTORS.loginForm }`, {
+		await page.waitForSelector( `${ SELECTORS.dashboard }, ${ SELECTORS.loginForm }`, {
 			timeout: Math.min( timeout, 15000 ),
 		} );
 	} catch {
 		return false;
 	}
 
-	return 0 < ( await page.locator( SELECTORS.calendar ).count() );
+	// Formularz logowania na ekranie przewaza - pulpit moze byc pod spodem.
+	if ( 0 < ( await page.locator( SELECTORS.loginForm ).count() ) ) {
+		return false;
+	}
+
+	return 0 < ( await page.locator( SELECTORS.dashboard ).count() );
+}
+
+/**
+ * Kalendarz doczytuje sie po pulpicie. Jego brak NIE jest bledem logowania -
+ * moze po prostu nie byc aktywnego zamowienia. Mowimy o tym i idziemy dalej.
+ */
+async function waitForCalendar( page, timeout, log ) {
+	try {
+		await page.waitForSelector( SELECTORS.calendar, { timeout } );
+
+		return true;
+	} catch {
+		log(
+			'Zalogowano, ale panel nie pokazał kalendarza. Najczęstsza przyczyna: ' +
+				'brak aktywnego zamówienia na tym koncie. Uruchom `npm run diagnose` — ' +
+				'zrobi zrzut ekranu i wypisze, co panel faktycznie wyświetla.'
+		);
+
+		return false;
+	}
 }
 
 /**
@@ -224,12 +253,13 @@ async function login( page, { panelUrl, user, password, timeout, log } ) {
 	await submit.click();
 
 	try {
-		await page.waitForSelector( SELECTORS.calendar, { timeout } );
+		await page.waitForSelector( SELECTORS.dashboard, { timeout } );
 	} catch {
 		throw new PanelLoginError( await loginFailureReason( page ) );
 	}
 
 	log( 'Zalogowano.' );
+	await waitForCalendar( page, Math.min( timeout, 20000 ), log );
 }
 
 /**
@@ -251,7 +281,8 @@ async function loginFailureReason( page ) {
 		return 'Logowanie nie powiodło się — sprawdź KV_PANEL_USER i KV_PANEL_PASSWORD w agent/.env.';
 	}
 
-	return 'Zalogowano, ale panel nie pokazał kalendarza. Możliwe, że nie ma aktywnego zamówienia.';
+	return 'Panel nie pokazał ani kalendarza, ani pulpitu. Uruchom `npm run diagnose`, ' +
+		'żeby zobaczyć zrzut ekranu i treść strony.';
 }
 
 /**

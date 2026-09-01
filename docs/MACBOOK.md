@@ -227,6 +227,8 @@ Skrypt użyje wtedy Twojego Chrome'a zamiast pobierać własnego Chromium.
 
 | Objaw | Co zrobić |
 | --- | --- |
+| `panel nie pokazał kalendarza` | To nie błąd logowania. `npm run diagnose` wypisze, co panel wyświetla, i zapisze `panel.png` |
+| `git pull` mówi o nadpisaniu `package.json` | `git checkout -- package.json` a potem `git pull` — zainstalowane paczki zostają nietknięte |
 | `Nie znalazłem kalendarza "Jadłospis"` | Załóż kalendarz o tej nazwie (krok 3) albo popraw `KV_APPLE_CALENDAR` |
 | `macOS nie pozwolił sterować Kalendarzem` | Ustawienia → Prywatność i ochrona → Automatyzacja → Terminal → Kalendarz |
 | Logowanie się nie udaje | `KV_HEADLESS=0 npm run sync:dry` i zobacz, co pokazuje panel |

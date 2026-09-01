@@ -182,6 +182,41 @@ const sessionPath = join( dir, 'session.json' );
 	}
 }
 
+// --- konto bez aktywnego zamowienia -------------------------------------
+// Pulpit jest, kalendarza nie ma. To NIE jest bląd logowania - ma się skończyć
+// pustą listą i zrozumiałym komunikatem, a nie wyjątkiem.
+{
+	const empty = await startFakePanel( { noOrder: true } );
+	const messages = [];
+
+	try {
+		const days = await withPanel(
+			{
+				panelUrl: empty.url,
+				user: credentials.user,
+				password: credentials.password,
+				timeout: 8000,
+				log: ( message ) => messages.push( message ),
+			},
+			( page ) => collectDays( page, { log: ( message ) => messages.push( message ) } )
+		);
+
+		same( 0, days.length, 'brak zamówienia daje pustą listę dni' );
+		ok(
+			messages.some( ( message ) => /nie pokazał kalendarza|aktywnego zamówienia/i.test( message ) ),
+			'komunikat tłumaczy brak kalendarza zamiast milczeć'
+		);
+		ok(
+			messages.some( ( message ) => /diagnose/.test( message ) ),
+			'komunikat podpowiada, czym to zdiagnozować'
+		);
+	} catch ( error ) {
+		failures.push( `brak zamówienia wywrócił przebieg zamiast go zakończyć: ${ error.message }` );
+	} finally {
+		empty.server.close();
+	}
+}
+
 server.close();
 rmSync( dir, { recursive: true, force: true } );
 

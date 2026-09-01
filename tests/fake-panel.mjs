@@ -90,7 +90,7 @@ function loginPage( failed, bannerMode ) {
 </body></html>`;
 }
 
-function dashboardPage() {
+function dashboardPage( noOrder ) {
 	const dayTile = ( date ) => `
 		<div data-date="${ date }">
 			<div class="relative inline-block group">
@@ -103,7 +103,17 @@ function dashboardPage() {
 			</div>
 		</div>`;
 
+	if ( noOrder ) {
+		// Konto bez aktywnego zamowienia: pulpit jest, kalendarza nie ma.
+		return `<!doctype html><html lang="pl-PL"><body>
+			<div class="navigation"><p class="navigation-links-title">Panel Kuchnia Vikinga</p></div>
+			<div class="app-content"><h2 class="h200" id="pageHeader">Zamówienia</h2>
+				<p>Nie masz aktywnych zamówień.</p></div>
+		</body></html>`;
+	}
+
 	return `<!doctype html><html lang="pl-PL"><body>
+	<div class="navigation"><p class="navigation-links-title">Panel Kuchnia Vikinga</p></div>
 	<div class="calendar-slider-items">${ DATES.map( dayTile ).join( '' ) }</div>
 	<div id="dayDetailsCard"><div class="card-header"><h3 id="day-details-date"></h3></div>
 		<div class="card-body"><ul class="dashboard-meals-list"></ul></div>
@@ -204,7 +214,7 @@ export function startFakePanel( options = {} ) {
 
 			res.writeHead( 200, { 'Content-Type': 'text/html; charset=utf-8' } );
 
-			return res.end( dashboardPage() );
+			return res.end( dashboardPage( Boolean( options.noOrder ) ) );
 		}
 
 		res.writeHead( 404 );
