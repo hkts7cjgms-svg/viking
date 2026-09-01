@@ -1,0 +1,8 @@
+# Dane dostepowe agenta - nigdy do repozytorium.
+.env
+agent/.env
+
+node_modules/
+vendor/
+*.log
+.DS_Store

@@ -1,0 +1,28 @@
+/* Formularz wydarzenia w panelu. */
+
+.kv-meta .kv-checkboxes {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.25rem 1rem;
+}
+
+.kv-meta .kv-checkboxes label {
+	white-space: nowrap;
+}
+
+.kv-settings__mode {
+	margin-bottom: 1rem;
+}
+
+.kv-settings__snippet {
+	background: #1d2327;
+	color: #f0f0f1;
+	padding: 1rem;
+	border-radius: 4px;
+	overflow-x: auto;
+}
+
+.kv-settings__snippet code {
+	background: none;
+	color: inherit;
+}

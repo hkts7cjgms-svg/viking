@@ -1,0 +1,40 @@
+/* Wydarzenia doklejane do opisu posilku. Neutralne, dziedziczy typografie motywu. */
+
+.kv-wydarzenia {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	margin: 0.75rem 0;
+}
+
+.kv-wydarzenia__item {
+	border-left: 3px solid #f9bd16;
+	background: rgba(249, 189, 22, 0.08);
+	border-radius: 0 4px 4px 0;
+	padding: 0.6rem 0.85rem;
+}
+
+.kv-wydarzenia__title {
+	margin: 0;
+	font-weight: 600;
+	line-height: 1.35;
+}
+
+.kv-wydarzenia__badge {
+	display: inline-block;
+	margin-right: 0.4em;
+}
+
+.kv-wydarzenia__body {
+	margin-top: 0.35rem;
+}
+
+.kv-wydarzenia__body > p:last-child {
+	margin-bottom: 0;
+}
+
+@media (prefers-color-scheme: dark) {
+	.kv-wydarzenia__item {
+		background: rgba(249, 189, 22, 0.14);
+	}
+}
