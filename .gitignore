@@ -9,3 +9,7 @@ vendor/
 
 # Zapamietana sesja panelu - dane logowania, nigdy do repozytorium.
 agent/.session.json
+
+# Log codziennej synchronizacji.
+sync.log
+panel.png

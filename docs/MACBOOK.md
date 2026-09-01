@@ -114,59 +114,34 @@ tylko po wygaśnięciu sesji po stronie panelu.
 
 ## Krok 6 — codziennie samo
 
-macOS ma do tego `launchd`. Utwórz plik:
+Jedno polecenie. Ścieżki wykrywa samo, nie ma czego podmieniać:
 
 ```bash
-mkdir -p ~/Library/LaunchAgents
-cat > ~/Library/LaunchAgents/pl.kuchniavikinga.sync.plist <<'PLIST'
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>Label</key><string>pl.kuchniavikinga.sync</string>
-  <key>ProgramArguments</key>
-  <array>
-    <string>/opt/homebrew/bin/node</string>
-    <string>agent/sync-to-calendar.mjs</string>
-    <string>--days</string>
-    <string>21</string>
-  </array>
-  <key>WorkingDirectory</key><string>/Users/TWOJA-NAZWA/Projekty/viking</string>
-  <key>StartCalendarInterval</key>
-  <dict><key>Hour</key><integer>7</integer><key>Minute</key><integer>30</integer></dict>
-  <key>StandardOutPath</key><string>/tmp/kv-sync.log</string>
-  <key>StandardErrorPath</key><string>/tmp/kv-sync.err</string>
-</dict>
-</plist>
-PLIST
-
-launchctl load ~/Library/LaunchAgents/pl.kuchniavikinga.sync.plist
+cd ~/Projekty/viking
+npm run autostart
 ```
 
-Podmień `TWOJA-NAZWA` na swoją nazwę użytkownika (pokaże ją `whoami`). Ścieżkę
-do node sprawdzisz przez `which node` — na Macach z procesorem Intel będzie to
-`/usr/local/bin/node`.
+Domyślnie codziennie o 7:30. Inna godzina — podaj ją po `--`:
 
-Podgląd logu: `tail -f /tmp/kv-sync.log`
+```bash
+npm run autostart -- 6 45     # codziennie o 6:45
+```
 
-Wyłączenie: `launchctl unload ~/Library/LaunchAgents/pl.kuchniavikinga.sync.plist`
+Nie czekaj do rana, sprawdź od razu:
 
-> Uwaga: `launchd` uruchomi zadanie tylko gdy MacBook jest włączony. Jeśli o 7:30
-> był uśpiony, zadanie odpali się po wybudzeniu.
+```bash
+launchctl start pl.kuchniavikinga.sync
+tail -f sync.log
+```
 
-## Ile dni się pobiera
+Wyłączenie:
 
-Tyle, ile catering opublikował. Menu bywa gotowe na kilkanaście dni do przodu,
-więc dalsze dni zamówienia — mimo że w panelu są klikalne — nie mają jeszcze
-jadłospisu i zostają pominięte z komunikatem `jadłospis jeszcze nieopublikowany`.
+```bash
+launchctl unload ~/Library/LaunchAgents/pl.kuchniavikinga.sync.plist
+```
 
-To nie jest błąd i nie trzeba nic robić. Codzienne uruchomienie samo dobierze
-każdy dzień w chwili, gdy menu się pojawi. Nic się przy tym nie dubluje ani nie
-nadpisuje — dni już pobrane zostają nietknięte.
-
-Dlaczego takie dni są pomijane, a nie zapisywane jako puste: panel zostawia
-wtedy na ekranie dania z poprzedniego dnia. Zapisanie tego, co widać, wpisałoby
-obiad z 16 września pod datę 17 września — po cichu, bez żadnego błędu.
+> `launchd` uruchomi zadanie tylko gdy MacBook jest włączony. Jeśli o wyznaczonej
+> godzinie był uśpiony, zadanie odpali się zaraz po wybudzeniu.
 
 ## Archiwum jadłospisu
 
