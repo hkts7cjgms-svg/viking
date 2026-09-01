@@ -124,16 +124,21 @@ async function main() {
 	const log = flags.quiet ? () => {} : ( message ) => process.stdout.write( `${ message }\n` );
 
 	const from = typeof flags.from === 'string' ? flags.from : today();
+
+	// Bez --to i bez --days bierzemy wszystko, co kalendarz pokazuje od dzis.
+	// Sztywne 21 dni ucinalo ostatnie dni zamowienia.
 	const to =
 		typeof flags.to === 'string'
 			? flags.to
-			: addDays( from, Math.max( 0, Number( flags.days || 21 ) - 1 ) );
+			: flags.days
+				? addDays( from, Math.max( 0, Number( flags.days ) - 1 ) )
+				: null;
 
 	requireEnv( [ 'KV_PANEL_URL', 'KV_PANEL_USER', 'KV_PANEL_PASSWORD' ] );
 
 	const { withPanel, collectDays } = await import( './panel-sync.mjs' );
 
-	log( `Zakres: ${ from } → ${ to }` );
+	log( `Zakres: ${ from } → ${ to || 'wszystko, co pokazuje kalendarz' }` );
 
 	const days = await withPanel(
 		{
@@ -233,7 +238,7 @@ async function syncApple( days, { title, flags, log } ) {
 
 async function syncGoogle( days, { title, from, to, flags, log } ) {
 	const client = createClient( { ...googleConfigFromEnv(), fetch: globalThis.fetch } );
-	const existing = await client.listManaged( from, to );
+	const existing = await client.listManaged( from, to || addDays( from, 365 ) );
 
 	log( `W kalendarzu jest już ${ existing.length } wpisów z tej synchronizacji.` );
 

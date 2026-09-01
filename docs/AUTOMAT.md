@@ -82,7 +82,8 @@ Raz dziennie w nocy, trzy tygodnie do przodu:
 
 | Flaga | Znaczenie |
 | --- | --- |
-| `--days 21` | ile dni do przodu (domyślnie 21) |
+| _(bez flag)_ | bierze wszystko, co kalendarz pokazuje od dziś |
+| `--days 21` | ogranicz do N dni do przodu |
 | `--from`, `--to` | konkretny zakres zamiast `--days` |
 | `--dry-run` | pokazuje plan, nie rusza kalendarza |
 | `--out menu.json` | sam odczyt jadłospisu do pliku, bez kalendarza |

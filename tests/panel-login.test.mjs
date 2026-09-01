@@ -182,6 +182,27 @@ const sessionPath = join( dir, 'session.json' );
 	}
 }
 
+// --- zakres dat ---------------------------------------------------------
+// Bez gornej granicy bierzemy wszystko; z granica ucinamy dokladnie tam, gdzie
+// trzeba. Sztywne 21 dni gubilo ostatni dzien zamowienia.
+{
+	const bounded = await withPanel(
+		{ panelUrl: url, user: credentials.user, password: credentials.password, timeout: 10000 },
+		( page ) => collectDays( page, { from: '2026-09-01', to: '2026-09-03' } )
+	);
+
+	same( 1, bounded.length, 'górna granica zakresu odcina późniejsze dni' );
+	same( '2026-09-02', bounded[ 0 ].date, 'w zakresie zostaje właściwy dzień' );
+
+	const unbounded = await withPanel(
+		{ panelUrl: url, user: credentials.user, password: credentials.password, timeout: 10000 },
+		( page ) => collectDays( page, { from: '2026-09-01' } )
+	);
+
+	same( 2, unbounded.length, 'bez górnej granicy bierzemy wszystkie dni z jadłospisem' );
+	same( '2026-09-04', unbounded[ 1 ].date, 'ostatni dzień jadłospisu nie wypada za burtę' );
+}
+
 // --- konto bez aktywnego zamowienia -------------------------------------
 // Pulpit jest, kalendarza nie ma. To NIE jest bląd logowania - ma się skończyć
 // pustą listą i zrozumiałym komunikatem, a nie wyjątkiem.

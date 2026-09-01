@@ -133,7 +133,9 @@ async function isLoggedIn( page, timeout ) {
  */
 async function waitForCalendar( page, timeout, log ) {
 	try {
-		await page.waitForSelector( SELECTORS.calendar, { timeout } );
+		// 'attached', nie 'visible': kalendarz to poziomy suwak, ktory potrafi
+		// przez chwile miec zerowa wysokosc, choc jest juz w drzewie strony.
+		await page.waitForSelector( SELECTORS.calendar, { timeout, state: 'attached' } );
 
 		return true;
 	} catch {
@@ -293,6 +295,13 @@ async function loginFailureReason( page ) {
  */
 export async function collectDays( page, opts = {} ) {
 	const log = opts.log || ( () => {} );
+
+	// Kalendarz mogl jeszcze nie doczytac sie zaraz po zalogowaniu - czekamy
+	// dopiero tutaj, czyli w chwili, w ktorej jest faktycznie potrzebny.
+	await page
+		.waitForSelector( SELECTORS.calendar, { timeout: opts.calendarTimeout || 20000, state: 'attached' } )
+		.catch( () => {} );
+
 	const calendar = await page.evaluate( extractDates );
 	const all = calendar.days || [];
 
