@@ -160,6 +160,8 @@ async function main() {
 				details: ! flags[ 'no-details' ] && '0' !== process.env.KV_FETCH_DETAILS,
 				// Ile czekac, az panel doczyta posilki po przelaczeniu dnia.
 				mealsTimeout: Number( process.env.KV_MEALS_TIMEOUT || 15000 ),
+				// Ile czekac na okno ze skladnikami po klinieciu w danie.
+				detailsTimeout: Number( process.env.KV_DETAILS_TIMEOUT || 10000 ),
 			} )
 	);
 

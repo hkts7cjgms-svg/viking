@@ -12,7 +12,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { extractDates, extractDay } from './panel-scrape.mjs';
+import { extractDates, extractDay, extractSidebarDetails } from './panel-scrape.mjs';
 
 const HERE = dirname( fileURLToPath( import.meta.url ) );
 
@@ -115,6 +115,53 @@ async function report( page ) {
 			log( `  ${ meal.name }: ${ meal.description.slice( 0, 70 ) }` );
 		}
 	}
+
+	// Proba otwarcia okna szczegolow pierwszego posilku - to najczestsze miejsce,
+	// w ktorym odczyt sie zatrzymuje, a bez faktow mozna tylko zgadywac.
+	const firstMeal = page.locator( 'ul.dashboard-meals-list > li.enhanced-meal-card' ).first();
+
+	if ( 0 < ( await firstMeal.count().catch( () => 0 ) ) ) {
+		log();
+		log( 'Okno szczegółów posiłku (klikam w pierwsze danie):' );
+
+		for ( const handle of [ '.meal-content', '.meal-nutritions', '.meal-header' ] ) {
+			const target = firstMeal.locator( handle ).first();
+
+			if ( 0 === ( await target.count().catch( () => 0 ) ) ) {
+				log( `  · ${ handle.padEnd( 18 ) } brak takiego elementu` );
+				continue;
+			}
+
+			await target.click( { timeout: 3000 } ).catch( () => {} );
+			await page.waitForTimeout( 1500 );
+
+			const found = await page.evaluate( () => ( {
+				ingredients: Boolean( document.querySelector( '.details-ingredients' ) ),
+				sidebar: ( ( document.querySelector( '#sideBar' ) || {} ).textContent || '' ).trim().length,
+				dialogs: document.querySelectorAll( '[class*="max-h-"], [role="dialog"]' ).length,
+			} ) );
+
+			log(
+				`  ${ found.ingredients ? '✓' : '·' } ${ handle.padEnd( 18 ) } ` +
+					`składniki: ${ found.ingredients ? 'tak' : 'nie' }, ` +
+					`#sideBar: ${ found.sidebar } znaków, okien: ${ found.dialogs }`
+			);
+
+			if ( found.ingredients ) {
+				const details = await page.evaluate( extractSidebarDetails ).catch( () => ( {} ) );
+
+				for ( const [ key, value ] of Object.entries( details ) ) {
+					log( `      ${ key }: ${ String( value ).slice( 0, 80 ) }` );
+				}
+
+				break;
+			}
+
+			await page.keyboard.press( 'Escape' ).catch( () => {} );
+			await page.waitForTimeout( 400 );
+		}
+	}
+
 }
 
 try {

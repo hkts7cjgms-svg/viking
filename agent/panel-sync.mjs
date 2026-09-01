@@ -647,7 +647,7 @@ async function collectSingleDay( page, date, opts ) {
 	}
 
 	if ( false !== opts.details ) {
-		await addMealDetails( page, day, log );
+		await addMealDetails( page, day, log, opts );
 	}
 
 	log( `  ${ date }: ${ day.meals.length } posiłków.` );
@@ -715,41 +715,96 @@ async function openDay( page, date ) {
  * klawiszem Escape. Nic wewnatrz panelu nie jest klikane - w tej aplikacji
  * sa akcje zmieniajace zamowienie i pomylka kosztowalaby realne pieniadze.
  */
-async function addMealDetails( page, day, log ) {
-	for ( let index = 0; index < day.meals.length; index++ ) {
-		const content = page.locator( `${ SELECTORS.mealCard } ${ SELECTORS.mealContent }` ).nth( index );
+/**
+ * Otwiera okno szczegolow posilku i oddaje jego zawartosc.
+ *
+ * Panel wiesza uchwyt kliniecia na kilku miejscach karty (opis, wartosci
+ * odzywcze, naglowek) - probujemy po kolei, bo nie wiadomo, ktore z nich
+ * otwiera okno w danym wydaniu panelu.
+ *
+ * @returns {Promise<object|null>} Szczegoly albo null, gdy okno sie nie otworzylo.
+ */
+async function openMealDetails( page, card, timeout ) {
+	const handles = [ SELECTORS.mealContent, '.meal-nutritions', '.meal-header' ];
 
-		if ( 0 === ( await content.count() ) ) {
+	for ( const handle of handles ) {
+		const target = card.locator( handle ).first();
+
+		if ( 0 === ( await target.count().catch( () => 0 ) ) ) {
 			continue;
 		}
 
-		try {
-			await content.click();
+		await target.scrollIntoViewIfNeeded( { timeout: 2000 } ).catch( () => {} );
+		await target.click( { timeout: 3000 } ).catch( () => {} );
 
-			await page.waitForFunction(
-				( selector ) => {
-					var node = document.querySelector( selector );
-
-					return Boolean( node ) && node.textContent.trim().length > 0;
-				},
-				SELECTORS.details,
-				{ timeout: 6000 }
-			);
-
-			day.meals[ index ].details = await page.evaluate( extractSidebarDetails );
-		} catch {
-			log( `    ${ day.date } / ${ day.meals[ index ].slug }: nie udało się odczytać szczegółów.` );
-		} finally {
-			// Zamykamy krzyzykiem, a gdy go nie ma - Escapem. Nic innego w tym
-			// oknie nie jest klikane: sa tu akcje zmieniajace zamowienie.
-			const close = page.locator( '[role="button"] i.fa-times, [role="button"] .fa-times' ).first();
-
-			if ( 0 < ( await close.count().catch( () => 0 ) ) ) {
-				await close.click( { timeout: 2000 } ).catch( () => {} );
-			}
-
-			await page.keyboard.press( 'Escape' ).catch( () => {} );
-			await page.waitForTimeout( 300 );
+		if ( await waitForDetails( page, timeout ) ) {
+			return page.evaluate( extractSidebarDetails );
 		}
+
+		// Klikniecie mogl przechwycic dymek albo nakladka - probujemy programowo.
+		await target.dispatchEvent( 'click' ).catch( () => {} );
+
+		if ( await waitForDetails( page, timeout ) ) {
+			return page.evaluate( extractSidebarDetails );
+		}
+	}
+
+	return null;
+}
+
+function waitForDetails( page, timeout ) {
+	return page
+		.waitForFunction(
+			( selector ) => {
+				var node = document.querySelector( selector );
+
+				return Boolean( node ) && node.textContent.trim().length > 0;
+			},
+			SELECTORS.details,
+			{ timeout }
+		)
+		.then( () => true )
+		.catch( () => false );
+}
+
+/** Zamyka okno szczegolow, nie dotykajac niczego w jego srodku. */
+async function closeMealDetails( page ) {
+	const close = page.locator( '[role="button"] i.fa-times, [role="button"] .fa-times' ).first();
+
+	if ( 0 < ( await close.count().catch( () => 0 ) ) ) {
+		await close.click( { timeout: 2000 } ).catch( () => {} );
+	}
+
+	await page.keyboard.press( 'Escape' ).catch( () => {} );
+	await page.waitForTimeout( 300 );
+}
+
+async function addMealDetails( page, day, log, opts = {} ) {
+	const timeout = opts.detailsTimeout || 10000;
+	let failures = 0;
+
+	for ( let index = 0; index < day.meals.length; index++ ) {
+		const card = page.locator( SELECTORS.mealCard ).nth( index );
+
+		if ( 0 === ( await card.count().catch( () => 0 ) ) ) {
+			continue;
+		}
+
+		const details = await openMealDetails( page, card, timeout );
+
+		if ( details && 0 < Object.keys( details ).length ) {
+			day.meals[ index ].details = details;
+		} else {
+			failures++;
+		}
+
+		await closeMealDetails( page );
+	}
+
+	if ( failures ) {
+		log(
+			`    ${ day.date }: nie udało się odczytać szczegółów ${ failures } z ${ day.meals.length } posiłków. ` +
+				'Sprawdź `npm run diagnose`, a jeśli chcesz pominąć składniki: --no-details.'
+		);
 	}
 }

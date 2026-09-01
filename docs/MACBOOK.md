@@ -237,6 +237,7 @@ Skrypt użyje wtedy Twojego Chrome'a zamiast pobierać własnego Chromium.
 | `CybotCookiebotDialog intercepts pointer events` | Baner zgód zasłonił przycisk. Naprawione — zrób `git pull` i uruchom ponownie |
 | `command not found: node` | `brew install node`, potem otwórz Terminal od nowa |
 | `brak posiłków (dzień bez dostawy)` przy każdym dniu | Panel dociąga jadłospis wolniej niż zwykle. Zwiększ cierpliwość: `KV_MEALS_TIMEOUT=30000 npm run sync:dry` |
+| `nie udało się odczytać szczegółów N z 3 posiłków` | `npm run diagnose` pokaże, które kliknięcie otwiera okno składników. Doraźnie: `KV_DETAILS_TIMEOUT=20000 npm run sync` albo `--no-details` |
 | `jadłospis jeszcze nieopublikowany` | Normalne. Catering publikuje menu z wyprzedzeniem kilkunastu dni — te dni dojdą same przy kolejnych uruchomieniach |
 | Zero pobranych dni | `npm run diagnose` — wypisze każdy dzień z kalendarza i zrobi zrzut ekranu `panel.png` |
 | Dni są, ale poza zakresem | Diagnoza pokaże zakres panelu; uruchom np. `node agent/sync-to-calendar.mjs --from 2026-09-02 --to 2026-09-22` |
