@@ -97,17 +97,22 @@ export function buildEvent( day, options = {} ) {
 }
 
 /**
- * Plan synchronizacji: co dodac, co poprawic, co usunac, co zostawic.
+ * Plan synchronizacji: co dodac, co poprawic, co ewentualnie usunac.
  *
- * Usuwamy tylko wpisy oznaczone jako nasze i tylko w obrebie synchronizowanego
- * zakresu dat - reszta kalendarza pozostaje nietknieta.
+ * DOMYSLNIE NIC NIE USUWAMY. Gdy posilek zniknie z panelu - bo zamowienie sie
+ * skonczylo albo dzien wypadl z jadlospisu - wpis w kalendarzu zostaje. Historia
+ * jest cenniejsza niz porzadek. Usuwanie wlacza sie swiadomie: removeMissing.
+ *
+ * Nawet wtedy ruszamy wylacznie wpisy z naszym znacznikiem i tylko w obrebie
+ * synchronizowanego zakresu dat.
  *
  * @param {Array}  days     Dni jadlospisu.
  * @param {Array}  existing Wpisy juz obecne w kalendarzu.
- * @param {object} options  Opcje (title).
+ * @param {object} options  Opcje: title, removeMissing.
  */
 export function planSync( days, existing, options = {} ) {
 	const plan = { insert: [], patch: [], remove: [], unchanged: [] };
+	const removeMissing = true === options.removeMissing;
 	const byDay = new Map();
 
 	for ( const item of existing || [] ) {
@@ -117,9 +122,12 @@ export function planSync( days, existing, options = {} ) {
 			continue;
 		}
 
-		// Duplikat na ten sam dzien - jeden zostaje, reszta do usuniecia.
+		// Duplikat na ten sam dzien - pierwszy zostaje, reszta tylko przy removeMissing.
 		if ( byDay.has( key ) ) {
-			plan.remove.push( item );
+			if ( removeMissing ) {
+				plan.remove.push( item );
+			}
+
 			continue;
 		}
 
@@ -149,9 +157,11 @@ export function planSync( days, existing, options = {} ) {
 		plan.patch.push( { id: current.id, event } );
 	}
 
-	// Zostaly wpisy na dni, ktorych juz nie ma w jadlospisie.
-	for ( const orphan of byDay.values() ) {
-		plan.remove.push( orphan );
+	// Zostaly wpisy na dni, ktorych juz nie ma w jadlospisie. Domyslnie zostaja.
+	if ( removeMissing ) {
+		for ( const orphan of byDay.values() ) {
+			plan.remove.push( orphan );
+		}
 	}
 
 	return plan;

@@ -40,5 +40,13 @@ echo "== odczyt jadlospisu z panelu =="
 node tests/panel-scrape.test.mjs
 
 echo
-echo "== synchronizacja z Kalendarzem Google =="
+echo "== synchronizacja z kalendarzem =="
 node tests/calendar-sync.test.mjs
+
+echo
+echo "== wpisy dla Kalendarza Apple =="
+node tests/apple-calendar.test.mjs
+
+echo
+echo "== archiwum jadlospisu =="
+node tests/archive.test.mjs

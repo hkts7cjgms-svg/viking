@@ -3,7 +3,7 @@
  */
 import { createRequire } from 'node:module';
 
-import { extractDates, extractDay } from '../agent/panel-scrape.mjs';
+import { extractDates, extractDay, extractSidebarDetails } from '../agent/panel-scrape.mjs';
 import { panelHtml } from './panel-fixture.mjs';
 
 const require = createRequire( import.meta.url );
@@ -104,6 +104,43 @@ withDom(
 		same( 0, day.meals.length, 'bez karty dnia nie ma posiłków' );
 	}
 );
+
+// --- szczegoly z bocznego panelu ----------------------------------------
+// Struktura panelu nie jest jeszcze znana, wiec sprawdzamy oba warianty:
+// gdy da sie rozpoznac naglowki i gdy trzeba wziac surowy tekst.
+withDom(
+	`<!doctype html><html><body><div id="sideBar">
+		<h3 class="h300">Skład</h3><div>mąka pszenna, ziemniaki, twaróg, cebula</div>
+		<h3 class="h300">Alergeny</h3><div>gluten, mleko</div>
+	</div></body></html>`,
+	() => {
+		const details = extractSidebarDetails();
+
+		same( 'mąka pszenna, ziemniaki, twaróg, cebula', details[ 'Skład' ], 'skład odczytany z panelu' );
+		same( 'gluten, mleko', details[ 'Alergeny' ], 'alergeny odczytane z panelu' );
+	}
+);
+
+withDom(
+	'<!doctype html><html><body><div id="sideBar">Pierogi z mięsem wieprzowym, kaszą i grzybami</div></body></html>',
+	() => {
+		const details = extractSidebarDetails();
+
+		same(
+			'Pierogi z mięsem wieprzowym, kaszą i grzybami',
+			details[ 'Szczegóły' ],
+			'bez rozpoznanych nagłówków bierzemy surowy tekst'
+		);
+	}
+);
+
+withDom( '<!doctype html><html><body><div id="sideBar"></div></body></html>', () => {
+	same( 0, Object.keys( extractSidebarDetails() ).length, 'pusty panel daje pustą mapę' );
+} );
+
+withDom( '<!doctype html><html><body></body></html>', () => {
+	same( 0, Object.keys( extractSidebarDetails() ).length, 'brak panelu nie wywraca funkcji' );
+} );
 
 if ( failures.length === 0 ) {
 	process.stdout.write( `OK - ${ passed } asercji przeszlo\n` );

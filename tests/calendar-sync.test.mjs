@@ -118,7 +118,13 @@ same( '2027-01-01', addDays( '2026-12-31', 1 ), 'dodawanie dni przechodzi przez 
 {
 	const plan = planSync( [], [ existingFor( wednesday ) ], { title: 'Jadłospis' } );
 
-	same( 1, plan.remove.length, 'wpis na dzień spoza jadłospisu jest usuwany' );
+	same( 0, plan.remove.length, 'domyślnie nic nie jest usuwane' );
+}
+
+{
+	const plan = planSync( [], [ existingFor( wednesday ) ], { title: 'Jadłospis', removeMissing: true } );
+
+	same( 1, plan.remove.length, 'z removeMissing wpis spoza jadłospisu jest usuwany' );
 	same( 'evt-1', plan.remove[ 0 ].id, 'usuwany jest właściwy wpis' );
 }
 
@@ -130,7 +136,18 @@ same( '2027-01-01', addDays( '2026-12-31', 1 ), 'dodawanie dni przechodzi przez 
 		{ title: 'Jadłospis' }
 	);
 
-	same( 1, plan.remove.length, 'duplikat na ten sam dzień jest sprzątany' );
+	same( 0, plan.remove.length, 'domyślnie nawet duplikat nie jest kasowany' );
+	same( 0, plan.insert.length, 'duplikat nie powoduje dodania trzeciego wpisu' );
+}
+
+{
+	const plan = planSync(
+		[ wednesday ],
+		[ existingFor( wednesday, 'evt-1' ), existingFor( wednesday, 'evt-2' ) ],
+		{ title: 'Jadłospis', removeMissing: true }
+	);
+
+	same( 1, plan.remove.length, 'z removeMissing duplikat jest sprzątany' );
 	same( 'evt-2', plan.remove[ 0 ].id, 'zostaje pierwszy wpis, duplikat znika' );
 }
 
@@ -175,7 +192,7 @@ same( '2027-01-01', addDays( '2026-12-31', 1 ), 'dodawanie dni przechodzi przez 
 	const plan = planSync(
 		[ wednesday, thursday ],
 		[ existingFor( day( '2026-09-02', [ [ 'Śniadanie', 'Coś innego', 100 ] ] ), 'evt-1' ), existingFor( day( '2026-09-09', [ [ 'Obiad', 'Stare', 1 ] ] ), 'evt-old' ) ],
-		{ title: 'Jadłospis' }
+		{ title: 'Jadłospis', removeMissing: true }
 	);
 
 	const report = await applySync( client, plan );

@@ -12,7 +12,7 @@
  * ten plik da się zastąpić zwykłymi zapytaniami HTTP - reszta łańcucha zostaje.
  */
 
-import { extractDates, extractDay } from './panel-scrape.mjs';
+import { extractDates, extractDay, extractSidebarDetails } from './panel-scrape.mjs';
 
 const SELECTORS = {
 	user: '#username',
@@ -22,6 +22,7 @@ const SELECTORS = {
 	dayHeading: '#day-details-date',
 	mealCard: 'ul.dashboard-meals-list > li.enhanced-meal-card',
 	calendar: '.calendar-slider-items',
+	sidebar: '#sideBar',
 };
 
 /**
@@ -102,6 +103,10 @@ export async function collectDays( page, opts = {} ) {
 			continue;
 		}
 
+		if ( opts.details ) {
+			await addMealDetails( page, day, log );
+		}
+
 		log( `  ${ date }: ${ day.meals.length } posiłków.` );
 		days.push( day );
 	}
@@ -148,4 +153,44 @@ async function openDay( page, date ) {
 	}
 
 	return true;
+}
+
+/**
+ * Otwiera boczny panel kazdego posilku i zbiera z niego szczegoly.
+ *
+ * ROBIMY TU WYLACZNIE DWIE RZECZY: klikamy w opis dania i zamykamy panel
+ * klawiszem Escape. Nic wewnatrz panelu nie jest klikane - w tej aplikacji
+ * sa akcje zmieniajace zamowienie i pomylka kosztowalaby realne pieniadze.
+ */
+async function addMealDetails( page, day, log ) {
+	for ( let index = 0; index < day.meals.length; index++ ) {
+		const content = page.locator( `${ SELECTORS.mealCard } ${ '.meal-content' }` ).nth( index );
+
+		if ( 0 === ( await content.count() ) ) {
+			continue;
+		}
+
+		try {
+			await content.click();
+
+			// Panel wsuwa sie z boku - czekamy, az faktycznie cos w nim bedzie.
+			await page.waitForFunction(
+				( selector ) => {
+					var node = document.querySelector( selector );
+
+					return Boolean( node ) && node.textContent.trim().length > 0;
+				},
+				SELECTORS.sidebar,
+				{ timeout: 5000 }
+			);
+
+			day.meals[ index ].details = await page.evaluate( extractSidebarDetails );
+		} catch {
+			log( `    ${ day.date } / ${ day.meals[ index ].slug }: nie udało się odczytać szczegółów.` );
+		} finally {
+			// Escape zamyka panel bez dotykania czegokolwiek w środku.
+			await page.keyboard.press( 'Escape' );
+			await page.waitForTimeout( 250 );
+		}
+	}
 }

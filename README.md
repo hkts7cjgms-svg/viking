@@ -13,10 +13,10 @@ pojawia się przy obiedzie tego dnia, sam znika dzień później.
 | `plugin/kuchnia-vikinga-wydarzenia/` | Wtyczka WordPressa: panel CRUD, doklejanie do jadłospisu, REST API |
 | `agent/kv-events.mjs` | CLI do zarządzania wydarzeniami z terminala lub crona |
 | `agent/mcp-server.mjs` | Serwer MCP — asystent zarządza wydarzeniami sam, bez panelu |
-| `agent/sync-to-calendar.mjs` | Automat: logowanie do panelu → jadłospis → Kalendarz Google |
+| `agent/sync-to-calendar.mjs` | Automat: logowanie do panelu → jadłospis → kalendarz + archiwum CSV |
 | `tests/` | Testy: logika dat w PHP, CLI i MCP na atrapie API |
 | `plugin/…/assets/panel-events.js` | Wstrzykiwacz wydarzeń do panelu klienta (przez GTM) |
-| `docs/` | [Instalacja](docs/INSTALACJA.md), [API](docs/API.md), [panel klienta](docs/PANEL-KLIENTA.md), [kalendarz](docs/KALENDARZ.md), [automat](docs/AUTOMAT.md) |
+| `docs/` | [Instalacja](docs/INSTALACJA.md), [API](docs/API.md), [panel klienta](docs/PANEL-KLIENTA.md), [kalendarz](docs/KALENDARZ.md), [automat](docs/AUTOMAT.md), **[MacBook krok po kroku](docs/MACBOOK.md)** |
 
 ## Jak to działa
 
@@ -91,9 +91,12 @@ npm run sync:dry     # próba na sucho
 npm run sync         # logowanie do panelu → jadłospis → Kalendarz Google
 ```
 
-Uruchamiane z crona utrzymuje kalendarz w zgodzie z panelem: dodaje nowe dni,
-poprawia zmienione, usuwa te, których już nie ma — i nie tyka cudzych wpisów.
-Konfiguracja: [docs/AUTOMAT.md](docs/AUTOMAT.md).
+Domyślnie zapisuje do **Kalendarza Apple** i dopisuje wszystkie dni do pliku CSV
+(otwiera się w Numbers i w Arkuszach Google). **Nic nigdy nie jest usuwane** —
+dzień, który zniknął z panelu, zostaje w kalendarzu i w archiwum.
+
+Krok po kroku na Macu: **[docs/MACBOOK.md](docs/MACBOOK.md)**.
+Wariant serwerowy z Kalendarzem Google: [docs/AUTOMAT.md](docs/AUTOMAT.md).
 
 ## Dwa miejsca, dwie drogi
 
@@ -114,7 +117,7 @@ npm install      # jednorazowo, dla jsdom
 bash tests/run.sh
 ```
 
-219 asercji: logika dopasowania dat i budowanie kanału iCal w czystym PHP, CLI i serwer
-MCP na atrapie API, odczyt jadłospisu i wstrzykiwacz na fragmencie prawdziwego HTML-a
-panelu, oraz planowanie synchronizacji z Kalendarzem Google — bez stawiania
-WordPressa, bez sieci i bez konta Google.
+278 asercji: logika dopasowania dat i kanał iCal w czystym PHP, CLI i serwer MCP na
+atrapie API, odczyt jadłospisu i wstrzykiwacz na fragmencie prawdziwego HTML-a panelu,
+planowanie synchronizacji kalendarza oraz archiwum CSV — bez stawiania WordPressa,
+bez sieci, bez konta Google i bez macOS.

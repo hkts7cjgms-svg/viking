@@ -4,18 +4,25 @@
  * zapis do Kalendarza Google. To jest to, co uruchamia cron.
  *
  *   node agent/sync-to-calendar.mjs --days 21
- *   node agent/sync-to-calendar.mjs --dry-run          (nic nie zapisuje)
- *   node agent/sync-to-calendar.mjs --out menu.json    (sam odczyt, bez kalendarza)
+ *   node agent/sync-to-calendar.mjs --dry-run             (nic nie zapisuje)
+ *   node agent/sync-to-calendar.mjs --out menu.json       (sam odczyt, bez kalendarza)
+ *   node agent/sync-to-calendar.mjs --target google       (zamiast Kalendarza Apple)
+ *
+ * Domyslnie zapisuje do Kalendarza Apple i NIGDY nic nie usuwa - dzien, ktory
+ * zniknal z panelu, zostaje w kalendarzu i w archiwum. Kasowanie wlacza --remove.
  *
  * Konfiguracja w agent/.env - patrz agent/.env.example.
  */
 
-import { readFileSync, existsSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { readFileSync, existsSync, writeFileSync, mkdirSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { createClient } from './google-calendar.mjs';
 import { planSync, applySync } from './calendar-sync.mjs';
+import { syncToAppleCalendar, isSupported, DEFAULT_CALENDAR } from './apple-calendar.mjs';
+import { saveArchive } from './archive.mjs';
 
 const HERE = dirname( fileURLToPath( import.meta.url ) );
 
@@ -58,6 +65,16 @@ function parseArgs( argv ) {
 	}
 
 	return flags;
+}
+
+/** Rozwija ~ i tworzy katalog docelowy - inaczej zapis archiwum by padl. */
+function preparePath( path ) {
+	const expanded = path.startsWith( '~/' ) ? join( homedir(), path.slice( 2 ) ) : path;
+	const full = resolve( expanded );
+
+	mkdirSync( dirname( full ), { recursive: true } );
+
+	return full;
 }
 
 function today() {
@@ -126,7 +143,14 @@ async function main() {
 			headless: '0' !== process.env.KV_HEADLESS,
 			log,
 		},
-		( page ) => collectDays( page, { from, to, log } )
+		( page ) =>
+			collectDays( page, {
+				from,
+				to,
+				log,
+				// Wchodzenie w kazdy posilek wydluza przebieg, wiec domyslnie wylaczone.
+				details: Boolean( flags.details ) || '1' === process.env.KV_FETCH_DETAILS,
+			} )
 	);
 
 	log( `Pobrano ${ days.length } dni z jadłospisem.` );
@@ -134,7 +158,18 @@ async function main() {
 	if ( typeof flags.out === 'string' ) {
 		writeFileSync( flags.out, JSON.stringify( days, null, 2 ), 'utf8' );
 		log( `Zapisano ${ flags.out }` );
+	}
 
+	// Archiwum jest niezalezne od kalendarza - dopisuje sie zawsze i nic nie gubi.
+	const archivePath = typeof flags.archive === 'string' ? flags.archive : process.env.KV_ARCHIVE_CSV;
+
+	if ( archivePath && days.length ) {
+		const archive = saveArchive( preparePath( archivePath ), days );
+
+		log( `Archiwum ${ archive.path }: ${ archive.after } wierszy (+${ archive.added }).` );
+	}
+
+	if ( flags.out ) {
 		return;
 	}
 
@@ -144,13 +179,66 @@ async function main() {
 		return;
 	}
 
+	const title = process.env.KV_CALENDAR_TITLE || 'Jadłospis — Kuchnia Vikinga';
+	const target = ( typeof flags.target === 'string' ? flags.target : process.env.KV_CALENDAR_TARGET ) || 'apple';
+
+	if ( 'apple' === target ) {
+		await syncApple( days, { title, flags, log } );
+
+		return;
+	}
+
+	if ( 'google' !== target ) {
+		throw new Error( `Nieznany cel: ${ target }. Użyj --target apple albo --target google.` );
+	}
+
+	await syncGoogle( days, { title, from, to, flags, log } );
+}
+
+async function syncApple( days, { title, flags, log } ) {
+	if ( ! isSupported() ) {
+		throw new Error(
+			'Kalendarz Apple działa tylko na macOS. Na innym systemie użyj --target google.'
+		);
+	}
+
+	const calendarName = process.env.KV_APPLE_CALENDAR || DEFAULT_CALENDAR;
+
+	log( `Kalendarz Apple: „${ calendarName }”` );
+
+	const report = await syncToAppleCalendar( days, {
+		calendarName,
+		title,
+		dryRun: Boolean( flags[ 'dry-run' ] ),
+	} );
+
+	for ( const error of report.errors ) {
+		process.stderr.write( `  ! ${ error }\n` );
+	}
+
+	if ( report.errors.length && ! report.created && ! report.updated ) {
+		throw new Error( 'Nie udało się zapisać nic do kalendarza.' );
+	}
+
+	log(
+		flags[ 'dry-run' ]
+			? `Próba na sucho: dodałbym ${ report.created }, poprawił ${ report.updated }, ` +
+					`${ report.unchanged } bez zmian.`
+			: `Gotowe: +${ report.created } nowych, ~${ report.updated } poprawionych, ` +
+					`${ report.unchanged } bez zmian. Nic nie usunięto.`
+	);
+}
+
+async function syncGoogle( days, { title, from, to, flags, log } ) {
 	const client = createClient( { ...googleConfigFromEnv(), fetch: globalThis.fetch } );
 	const existing = await client.listManaged( from, to );
 
 	log( `W kalendarzu jest już ${ existing.length } wpisów z tej synchronizacji.` );
 
 	const plan = planSync( days, existing, {
-		title: process.env.KV_CALENDAR_TITLE || 'Jadłospis — Kuchnia Vikinga',
+		title,
+		// Usuwanie jest swiadoma decyzja, nie domyslnym zachowaniem.
+		removeMissing: Boolean( flags.remove ),
 	} );
 
 	log(

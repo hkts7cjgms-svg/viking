@@ -110,3 +110,61 @@ export function extractDay() {
 		summary: summaryNode ? clean( summaryNode.textContent ) : '',
 	};
 }
+
+/**
+ * Szczegoly posilku z bocznego panelu, ktory otwiera sie po kliknieciu w danie.
+ *
+ * Struktura tego panelu nie jest jeszcze rozpoznana, wiec bierzemy jego tekst
+ * i probujemy rozbic go na pary "naglowek: tresc". Gdy sie nie uda, caly tekst
+ * laduje pod kluczem "Szczegóły" - lepiej miec surowo niz nie miec wcale.
+ *
+ * @returns {object} Mapa etykieta => tresc.
+ */
+export function extractSidebarDetails() {
+	function clean( value ) {
+		return String( value == null ? '' : value ).replace( /\s+/g, ' ' ).trim();
+	}
+
+	var sidebar = document.querySelector( '#sideBar' );
+
+	if ( ! sidebar ) {
+		return {};
+	}
+
+	var text = clean( sidebar.textContent );
+
+	if ( ! text ) {
+		return {};
+	}
+
+	var details = {};
+	var headings = sidebar.querySelectorAll( 'h1, h2, h3, h4, h5, h6, .h300, .h200, strong, dt, .item-title' );
+	var used = false;
+
+	for ( var i = 0; i < headings.length; i++ ) {
+		var label = clean( headings[ i ].textContent ).replace( /:$/, '' );
+
+		if ( ! label || label.length > 60 ) {
+			continue;
+		}
+
+		// Tresc to zwykle nastepny element albo reszta rodzica.
+		var valueNode = headings[ i ].nextElementSibling;
+		var value = valueNode ? clean( valueNode.textContent ) : '';
+
+		if ( ! value && headings[ i ].parentElement ) {
+			value = clean( headings[ i ].parentElement.textContent ).replace( label, '' ).trim();
+		}
+
+		if ( value && value !== label ) {
+			details[ label ] = value;
+			used = true;
+		}
+	}
+
+	if ( ! used ) {
+		details[ 'Szczegóły' ] = text;
+	}
+
+	return details;
+}
