@@ -346,11 +346,31 @@ export async function collectDays( page, opts = {} ) {
 	const days = [];
 
 	for ( const { date } of wanted ) {
+		// Dzien juz otwarty nie przeladowuje listy - nie ma na co czekac.
+		const alreadyOpen = await showsDay( page, date );
+		const before = alreadyOpen ? null : await mealSignature( page );
+
 		if ( ! ( await openDay( page, date ) ) ) {
 			const heading = await currentHeading( page );
 
 			log( `  ${ date }: nie udało się otworzyć${ heading ? ` (karta dnia pokazuje „${ heading }”)` : '' }, pomijam.` );
 			continue;
+		}
+
+		const mealsTimeout = opts.mealsTimeout || 10000;
+
+		if ( alreadyOpen ) {
+			// Dzien moze byc otwarty, a posilki wciaz sie doczytywac.
+			await waitForAnyMeals( page, mealsTimeout );
+		} else {
+			const freshness = await waitForFreshMeals( page, before, mealsTimeout );
+
+			if ( 'nieodswiezone' === freshness ) {
+				// Lista nadal pokazuje poprzedni dzien - lepiej pominac niz
+				// zapisac cudzy jadlospis pod ta data.
+				log( `  ${ date }: panel nie odświeżył listy posiłków, pomijam.` );
+				continue;
+			}
 		}
 
 		const day = await page.evaluate( extractDay );
@@ -424,6 +444,69 @@ function showsDay( page, date ) {
 
 		return false;
 	}, date );
+}
+
+/**
+ * Odcisk listy posilkow: identyfikatory kart. Kazdy posilek ma wlasny numer,
+ * wiec dwa rozne dni nigdy nie daja tego samego odcisku.
+ */
+function mealSignature( page ) {
+	return page.evaluate( () => {
+		var cards = document.querySelectorAll( 'ul.dashboard-meals-list > li.enhanced-meal-card' );
+		var ids = [];
+
+		for ( var i = 0; i < cards.length; i++ ) {
+			ids.push( cards[ i ].id );
+		}
+
+		return ids.join( ',' );
+	} );
+}
+
+/**
+ * Czeka, az panel doczyta posilki NOWEGO dnia.
+ *
+ * Naglowek karty zmienia sie natychmiast, a lista posilkow chwile pozniej -
+ * przez ten czas na ekranie wisza jeszcze dania z poprzedniego dnia. Czytanie
+ * ich w tym momencie zapisaloby cudzy jadlospis pod zla data.
+ *
+ * @returns {'swieze'|'puste'|'nieodswiezone'}
+ */
+async function waitForFreshMeals( page, before, timeout ) {
+	const deadline = Date.now() + timeout;
+	let current = '';
+
+	while ( Date.now() < deadline ) {
+		current = await mealSignature( page );
+
+		if ( current && current !== before ) {
+			return 'swieze';
+		}
+
+		await page.waitForTimeout( 200 );
+	}
+
+	// Pusta lista po odczekaniu to uczciwy brak dostawy.
+	return '' === current ? 'puste' : 'nieodswiezone';
+}
+
+/**
+ * Czeka na jakiekolwiek posilki. Dla dnia juz otwartego wystarczy - nie ma
+ * poprzedniej listy, z ktora mozna by je pomylic. Pusto po odczekaniu to
+ * uczciwa odpowiedz: tego dnia nie ma dostawy.
+ */
+async function waitForAnyMeals( page, timeout ) {
+	const deadline = Date.now() + timeout;
+
+	while ( Date.now() < deadline ) {
+		if ( await mealSignature( page ) ) {
+			return true;
+		}
+
+		await page.waitForTimeout( 200 );
+	}
+
+	return false;
 }
 
 /** Co panel pokazuje teraz - do komunikatu, gdy dzien sie nie otworzyl. */

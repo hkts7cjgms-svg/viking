@@ -81,6 +81,13 @@ const sessionPath = join( dir, 'session.json' );
 	same( '2026-09-02', days[ 0 ].date, 'dzień oznaczony is-disabled też jest pobierany' );
 	same( 3, days[ 0 ].meals.length, 'środa ma trzy posiłki' );
 	same( 'obiad', days[ 1 ].meals[ 0 ].slug, 'piątek ma obiad' );
+	// Panel dociąga posiłki z opóźnieniem — przez chwilę wiszą dania poprzedniego
+	// dnia. Odczyt w tym momencie zapisałby cudzy jadłospis pod złą datą.
+	same( 1, days[ 1 ].meals.length, 'piątek ma własną liczbę posiłków, nie trzy ze środy' );
+	ok(
+		days[ 1 ].meals[ 0 ].description.includes( 'Gulasz' ),
+		'jadłospis piątku nie jest przeterminowaną kopią środy'
+	);
 	ok(
 		days[ 0 ].meals[ 1 ].description.includes( 'Pierogi z ziemniakami' ),
 		'opis posiłku przeszedł przez prawdziwą przeglądarkę'

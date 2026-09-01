@@ -145,6 +145,10 @@ function dashboardPage( noOrder, sticky, blockPointer ) {
 				'Dzień, ' + Number( parts[ 2 ] ) + ' ' + MONTHS[ Number( parts[ 1 ] ) - 1 ];
 
 			var list = document.querySelector( '.dashboard-meals-list' );
+
+			// Panel dociaga posilki z serwera - przez ten czas na ekranie wisi
+			// jeszcze jadlospis poprzedniego dnia.
+			setTimeout( function () {
 			list.innerHTML = '';
 
 			( MENU[ date ] || [] ).forEach( function ( meal ) {
@@ -167,6 +171,7 @@ function dashboardPage( noOrder, sticky, blockPointer ) {
 				} );
 				list.appendChild( li );
 			} );
+			}, 500 );
 		}
 
 		document.addEventListener( 'keydown', function ( event ) {

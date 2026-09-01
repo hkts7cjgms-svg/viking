@@ -234,6 +234,8 @@ Skrypt użyje wtedy Twojego Chrome'a zamiast pobierać własnego Chromium.
 | Logowanie się nie udaje | `KV_HEADLESS=0 npm run sync:dry` i zobacz, co pokazuje panel |
 | `CybotCookiebotDialog intercepts pointer events` | Baner zgód zasłonił przycisk. Naprawione — zrób `git pull` i uruchom ponownie |
 | `command not found: node` | `brew install node`, potem otwórz Terminal od nowa |
+| `brak posiłków (dzień bez dostawy)` przy każdym dniu | Panel dociąga jadłospis wolniej niż zwykle. Zwiększ cierpliwość: `KV_MEALS_TIMEOUT=20000 npm run sync:dry` |
+| `panel nie odświeżył listy posiłków` | Zabezpieczenie przed zapisaniem jadłospisu poprzedniego dnia pod złą datą — dzień jest świadomie pomijany |
 | Zero pobranych dni | `npm run diagnose` — wypisze każdy dzień z kalendarza i zrobi zrzut ekranu `panel.png` |
 | Dni są, ale poza zakresem | Diagnoza pokaże zakres panelu; uruchom np. `node agent/sync-to-calendar.mjs --from 2026-09-02 --to 2026-09-22` |
 
