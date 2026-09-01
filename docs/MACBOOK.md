@@ -191,6 +191,38 @@ robi tam dokładnie dwie rzeczy: klika w opis dania i zamyka panel klawiszem
 Escape. **Niczego wewnątrz panelu nie klika.** Mimo to pierwszy raz uruchom to
 z `--dry-run` i `KV_HEADLESS=0`, żeby zobaczyć na własne oczy, co się dzieje.
 
+## Starszy macOS (12 Monterey i okolice)
+
+Rozpoznasz go po ostrzeżeniu Homebrew „You are using macOS 12 … not supported".
+Wszystko da się uruchomić, ale trzy rzeczy robi się inaczej:
+
+**1. Node.** Jeśli `brew install node` się wywali (na starym systemie Homebrew
+buduje ze źródeł i to potrafi paść), pobierz instalator wprost:
+[nodejs.org](https://nodejs.org) → **LTS** → plik `.pkg` → dwuklik, dalej, dalej.
+Node LTS działa na macOS 12 bez problemu.
+
+**2. Ścieżki.** Na Macach z procesorem Intel (instalacja w `/usr/local`) node
+ląduje w `/usr/local/bin/node` — i taką ścieżkę wpisz w pliku launchd zamiast
+`/opt/homebrew/bin/node`. Zawsze rozstrzyga wynik `which node`.
+
+**3. Przeglądarka.** Nowe wydania Playwrighta nie mają już buildów Chromium dla
+macOS 12 — `npx playwright install chromium` może odmówić. Wtedy, po kolei:
+
+```bash
+# a) starsza wersja Playwrighta, która jeszcze wspiera macOS 12
+npm install --save-exact playwright@1.47.2
+npx playwright install chromium
+```
+
+Jeśli i to odmówi — użyj Chrome'a, którego masz zainstalowanego. Dopisz
+w `agent/.env` jedną linię:
+
+```
+PLAYWRIGHT_CHROMIUM_PATH=/Applications/Google Chrome.app/Contents/MacOS/Google Chrome
+```
+
+Skrypt użyje wtedy Twojego Chrome'a zamiast pobierać własnego Chromium.
+
 ## Gdy coś nie działa
 
 | Objaw | Co zrobić |
