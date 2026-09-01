@@ -66,6 +66,47 @@ Otwórz panel, wejdź w dzień z wydarzeniem, otwórz konsolę przeglądarki.
 - Błąd `blocked by CORS policy` → punkt 1 nie został zapisany albo adres się nie zgadza.
 - Błąd `Refused to load … Content Security Policy` → patrz niżej.
 
+## Zapis jadłospisu do Kalendarza Google
+
+Ten sam skrypt dokłada w nagłówku karty dnia przycisk **„Zapisz w Kalendarzu Google"**.
+Kliknięcie otwiera gotowy formularz Kalendarza Google z wpisem całodniowym na wybrany
+dzień, a w opisie — jadłospis tego dnia:
+
+```
+ŚNIADANIE
+Kanapka z chlebem wiejskim, pieczonym schabem i serem, twarożek szczypiorkowy, pomidor
+479kcal · B: 46.7g · W: 27.7g · T: 20.2g
+
+OBIAD
+Pierogi z ziemniakami i twarogiem, okrasa z boczkiem, surówka z kiszonej kapusty
+589kcal · B: 18.6g · W: 63.0g · T: 28.5g
+```
+
+To zwykły link — **żadnego OAuth ani dostępu do konta Google**. Zapisuje ten, kto klika,
+na swoim koncie. Adres przelicza się przy każdej zmianie dnia, więc przycisk zawsze
+dotyczy tego, co widać na ekranie. Nasze wydarzenia doklejone do opisów posiłków
+do wpisu **nie** trafiają — do kalendarza idzie sam jadłospis.
+
+Wyłączenie albo zmiana etykiety:
+
+```html
+<script>
+  window.kvPanelEventsConfig = {
+    endpoint: 'https://kuchniavikinga.pl/wp-json/kv/v1/render',
+    saveButton: true,
+    saveButtonLabel: 'Zapisz w kalendarzu',
+    calendarTitle: 'Jadłospis — Kuchnia Vikinga'
+  };
+</script>
+```
+
+### Czego jeszcze nie obejmuje
+
+Zbierane jest to, co widać na karcie dnia: nazwa posiłku, opis i wartości odżywcze.
+**Szczegóły z bocznego panelu**, który otwiera się po kliknięciu w posiłek, nie —
+nie znam jeszcze jego struktury HTML. Wklej ją (tak jak poprzednio), a dołożę składniki,
+alergeny i cokolwiek tam jest.
+
 ## Czego ta droga nie załatwia
 
 Dwie rzeczy trzeba powiedzieć wprost:

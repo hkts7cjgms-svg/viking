@@ -79,6 +79,10 @@ https://kuchniavikinga.pl/wp-json/kv/v1/calendar.ics
 
 Szczegóły i sposób subskrypcji: [docs/KALENDARZ.md](docs/KALENDARZ.md).
 
+W panelu klienta skrypt dokłada dodatkowo przycisk **„Zapisz w Kalendarzu Google"** —
+jedno kliknięcie zapisuje jadłospis wybranego dnia jako wpis całodniowy, bez OAuth
+i bez dostępu do konta.
+
 ## Dwa miejsca, dwie drogi
 
 Jadłospis żyje w dwóch niezależnych systemach i każdy wymaga czego innego:
@@ -98,6 +102,6 @@ npm install      # jednorazowo, dla jsdom
 bash tests/run.sh
 ```
 
-140 asercji: logika dopasowania dat i budowanie kanału iCal w czystym PHP, CLI i serwer
-MCP na atrapie API oraz wstrzykiwacz do panelu na fragmencie prawdziwego HTML-a —
-bez stawiania WordPressa.
+162 asercje: logika dopasowania dat i budowanie kanału iCal w czystym PHP, CLI i serwer
+MCP na atrapie API oraz wstrzykiwacz i zapis dnia do kalendarza na fragmencie
+prawdziwego HTML-a panelu — bez stawiania WordPressa.

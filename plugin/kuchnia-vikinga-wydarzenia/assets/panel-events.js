@@ -27,6 +27,14 @@
 		mealBodySelector: '.meal-content',
 		markerClass: 'kv-panel-event',
 		debounceMs: 200,
+		// Przycisk "Zapisz w Kalendarzu Google" nad listą posiłków.
+		saveButton: true,
+		dayCardSelector: '#dayDetailsCard',
+		dayHeaderSelector: '.card-header',
+		mealNutritionSelector: '.meal-nutritions .nutrition-summary__item',
+		saveButtonClass: 'kv-panel-save-day',
+		saveButtonLabel: 'Zapisz w Kalendarzu Google',
+		calendarTitle: 'Jadłospis — Kuchnia Vikinga',
 	};
 
 	var DIACRITICS = {
@@ -129,6 +137,139 @@
 		}
 	}
 
+	/**
+	 * Zbiera to, co widac na karcie dnia: nazwe posilku, opis i wartosci odzywcze.
+	 *
+	 * Szczegoly z bocznego panelu (otwieranego klinieciem w posilek) tu nie trafiaja -
+	 * ich struktura nie jest jeszcze rozpoznana.
+	 */
+	function collectDay( root, config ) {
+		var date = findSelectedDate( root, config );
+
+		if ( ! date ) {
+			return null;
+		}
+
+		var cards = root.querySelectorAll( config.mealCardSelector );
+		var meals = [];
+
+		for ( var i = 0; i < cards.length; i++ ) {
+			var card = cards[ i ];
+			var nameNode = card.querySelector( config.mealNameSelector );
+			var bodyNode = card.querySelector( config.mealBodySelector );
+
+			if ( ! nameNode && ! bodyNode ) {
+				continue;
+			}
+
+			var nutritionNodes = card.querySelectorAll( config.mealNutritionSelector );
+			var nutrition = [];
+
+			for ( var n = 0; n < nutritionNodes.length; n++ ) {
+				var value = nutritionNodes[ n ].textContent.trim();
+
+				if ( value ) {
+					nutrition.push( value );
+				}
+			}
+
+			meals.push( {
+				slug: nameNode ? normalizeSlug( nameNode.textContent ) : '',
+				name: nameNode ? nameNode.textContent.trim() : '',
+				// Bez naszych wstawek - do kalendarza ma trafic sam jadlospis.
+				description: bodyNode ? textWithoutInjected( bodyNode, config.markerClass ) : '',
+				nutrition: nutrition,
+			} );
+		}
+
+		return { date: date, meals: meals };
+	}
+
+	/**
+	 * Tekst elementu z pominieciem tresci, ktore sami wczesniej doklejilismy.
+	 */
+	function textWithoutInjected( node, markerClass ) {
+		var text = '';
+		var children = node.childNodes;
+
+		for ( var i = 0; i < children.length; i++ ) {
+			var child = children[ i ];
+
+			if ( 1 === child.nodeType && child.classList && child.classList.contains( markerClass ) ) {
+				continue;
+			}
+
+			text += child.textContent || '';
+		}
+
+		return text.replace( /\s+/g, ' ' ).trim();
+	}
+
+	/**
+	 * Opis wpisu w kalendarzu - jeden blok na posilek.
+	 */
+	function formatDayDetails( day ) {
+		var blocks = [];
+
+		for ( var i = 0; i < day.meals.length; i++ ) {
+			var meal = day.meals[ i ];
+			var lines = [];
+
+			if ( meal.name ) {
+				lines.push( meal.name.toUpperCase() );
+			}
+
+			if ( meal.description ) {
+				lines.push( meal.description );
+			}
+
+			if ( meal.nutrition.length ) {
+				lines.push( meal.nutrition.join( ' · ' ) );
+			}
+
+			if ( lines.length ) {
+				blocks.push( lines.join( '\n' ) );
+			}
+		}
+
+		return blocks.join( '\n\n' );
+	}
+
+	function compactDate( date ) {
+		return String( date ).replace( /-/g, '' );
+	}
+
+	function addDays( date, days ) {
+		var parsed = new Date( date + 'T00:00:00Z' );
+
+		parsed.setUTCDate( parsed.getUTCDate() + days );
+
+		return parsed.toISOString().slice( 0, 10 );
+	}
+
+	/**
+	 * Link "dodaj wydarzenie" Kalendarza Google. Zwykly adres, bez OAuth i bez
+	 * dostepu do konta - klikniecie otwiera gotowy formularz do zapisania.
+	 *
+	 * Wpis jest calodniowy, a zakres dat w tym API jest wylaczny od konca,
+	 * stad dzien nastepny jako data konca.
+	 */
+	function buildGoogleCalendarUrl( day, title ) {
+		var url = new URL( 'https://calendar.google.com/calendar/render' );
+
+		url.searchParams.set( 'action', 'TEMPLATE' );
+		url.searchParams.set( 'text', title + ' · ' + day.date );
+		url.searchParams.set( 'dates', compactDate( day.date ) + '/' + compactDate( addDays( day.date, 1 ) ) );
+
+		var details = formatDayDetails( day );
+
+		if ( details ) {
+			url.searchParams.set( 'details', details );
+		}
+
+		return url.toString();
+	}
+
 	function create( options ) {
 		var config = Object.assign( {}, DEFAULTS, options || {} );
 		var cache = new Map();
@@ -168,6 +309,61 @@
 			for ( var i = 0; i < cards.length; i++ ) {
 				processCard( cards[ i ], date );
 			}
+
+			if ( config.saveButton ) {
+				mountSaveButton( date );
+			}
+		}
+
+		/**
+		 * Przycisk zapisu dnia. Adres przeliczamy przy kazdym przebiegu, bo po
+		 * zmianie dnia jadlospis jest juz inny.
+		 */
+		function mountSaveButton( date ) {
+			var card = document.querySelector( config.dayCardSelector );
+			var header = card ? card.querySelector( config.dayHeaderSelector ) : null;
+
+			if ( ! header ) {
+				return;
+			}
+
+			var day = collectDay( document, config );
+
+			if ( ! day || 0 === day.meals.length ) {
+				return;
+			}
+
+			var link = header.querySelector( '.' + config.saveButtonClass );
+
+			if ( ! link ) {
+				link = document.createElement( 'a' );
+				link.className = config.saveButtonClass;
+				link.target = '_blank';
+				link.rel = 'noopener noreferrer';
+				link.textContent = config.saveButtonLabel;
+
+				// Style inline - nie mamy jak wgrac arkusza do cudzej aplikacji.
+				// Kolor bierzemy ze zmiennej panelu, wiec przycisk trzyma sie motywu.
+				link.style.cssText = [
+					'display:inline-block',
+					'margin-left:auto',
+					'padding:6px 12px',
+					'border-radius:6px',
+					'border:1px solid var(--color-primary-500, #fac119)',
+					'background:var(--color-primary-100, #fffaf0)',
+					'color:inherit',
+					'font-size:13px',
+					'line-height:1.3',
+					'text-decoration:none',
+					'white-space:nowrap',
+					'cursor:pointer',
+				].join( ';' );
+
+				header.appendChild( link );
+			}
+
+			link.href = buildGoogleCalendarUrl( day, config.calendarTitle );
+			link.dataset.kvDay = date;
 		}
 
 		function processCard( card, date ) {
@@ -228,6 +424,9 @@
 		findSelectedDate: findSelectedDate,
 		readMealSlug: readMealSlug,
 		buildUrl: buildUrl,
+		collectDay: collectDay,
+		formatDayDetails: formatDayDetails,
+		buildGoogleCalendarUrl: buildGoogleCalendarUrl,
 		DEFAULTS: DEFAULTS,
 	};
 

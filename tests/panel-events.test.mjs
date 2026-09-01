@@ -202,6 +202,97 @@ ok( ! panelEvents.isValidDate( '15-09-2026' ), 'zły format daty odpada' );
 	delete global.fetch;
 }
 
+// --- zbieranie dnia i zapis do Kalendarza Google -------------------------
+{
+	const dom = new JSDOM( panelHtml(), { url: 'https://panel.kuchniavikinga.pl/' } );
+	const day = panelEvents.collectDay( dom.window.document, panelEvents.DEFAULTS );
+
+	same( '2026-09-02', day.date, 'zebrany dzień ma datę z kalendarza' );
+	same( 3, day.meals.length, 'zebrane są wszystkie posiłki dnia' );
+	same( 'sniadanie', day.meals[ 0 ].slug, 'pierwszy posiłek to śniadanie' );
+	same( 'Śniadanie', day.meals[ 0 ].name, 'nazwa posiłku bez nadmiarowych spacji' );
+	ok(
+		day.meals[ 1 ].description.startsWith( 'Pierogi z ziemniakami' ),
+		'opis posiłku trafia do zebranych danych'
+	);
+	same( '479kcal', day.meals[ 0 ].nutrition.join( ' · ' ), 'wartości odżywcze są zbierane' );
+
+	const details = panelEvents.formatDayDetails( day );
+	ok( details.includes( 'ŚNIADANIE' ), 'opis wpisu zawiera nagłówek posiłku' );
+	ok( details.includes( 'Tacos z szarpaną wieprzowiną' ), 'opis wpisu zawiera kolację' );
+	ok( details.includes( '479kcal' ), 'opis wpisu zawiera kalorie' );
+
+	const url = new URL( panelEvents.buildGoogleCalendarUrl( day, 'Jadłospis' ) );
+	same( 'calendar.google.com', url.hostname, 'link prowadzi do Kalendarza Google' );
+	same( 'TEMPLATE', url.searchParams.get( 'action' ), 'link używa formularza TEMPLATE' );
+	same( '20260902/20260903', url.searchParams.get( 'dates' ), 'wpis całodniowy, koniec wyłączny' );
+	ok( url.searchParams.get( 'text' ).includes( '2026-09-02' ), 'tytuł wpisu niesie datę' );
+	ok( url.searchParams.get( 'details' ).includes( 'Pierogi' ), 'szczegóły wpisu niosą jadłospis' );
+}
+
+// Wydarzenia doklejone przez nas nie moga wyciec do opisu wpisu w kalendarzu.
+{
+	const dom = new JSDOM( panelHtml(), { url: 'https://panel.kuchniavikinga.pl/' } );
+	const lunch = dom.window.document.querySelector( '#mealCard-4204326 .meal-content' );
+	const injected = dom.window.document.createElement( 'div' );
+
+	injected.className = 'kv-panel-event';
+	injected.textContent = 'Dzień Kuchni Polskiej';
+	lunch.appendChild( injected );
+
+	const day = panelEvents.collectDay( dom.window.document, panelEvents.DEFAULTS );
+
+	ok( day.meals[ 1 ].description.includes( 'Pierogi' ), 'oryginalny opis nadal jest zbierany' );
+	ok(
+		! day.meals[ 1 ].description.includes( 'Dzień Kuchni Polskiej' ),
+		'nasza wstawka nie trafia do danych dnia'
+	);
+}
+
+// --- przycisk zapisu w naglowku karty dnia -------------------------------
+{
+	const dom = new JSDOM( panelHtml(), { url: 'https://panel.kuchniavikinga.pl/' } );
+
+	global.window = dom.window;
+	global.document = dom.window.document;
+	global.MutationObserver = dom.window.MutationObserver;
+	global.fetch = () => Promise.resolve( { ok: true, json: () => Promise.resolve( { before: '', after: '' } ) } );
+
+	const injector = panelEvents.create( { debounceMs: 0 } );
+
+	injector.run();
+	await new Promise( ( resolve ) => setTimeout( resolve, 10 ) );
+
+	const button = dom.window.document.querySelector( '#dayDetailsCard .card-header .kv-panel-save-day' );
+
+	ok( Boolean( button ), 'przycisk zapisu pojawia się w nagłówku karty dnia' );
+	ok( button.href.includes( 'calendar.google.com' ), 'przycisk prowadzi do Kalendarza Google' );
+	ok( button.href.includes( '20260902' ), 'przycisk niesie datę otwartego dnia' );
+	same( '_blank', button.target, 'przycisk otwiera się w nowej karcie' );
+
+	// Zmiana dnia ma przeliczyc adres, a nie dolozyc drugi przycisk.
+	dom.window.document.querySelector( 'div[data-date="2026-09-02"] li.day' ).classList.remove( 'is-selected' );
+	dom.window.document.querySelector( 'div[data-date="2026-09-15"] li.day' ).classList.add( 'is-selected' );
+
+	injector.run();
+	await new Promise( ( resolve ) => setTimeout( resolve, 10 ) );
+
+	same(
+		1,
+		dom.window.document.querySelectorAll( '.kv-panel-save-day' ).length,
+		'po zmianie dnia nadal jest jeden przycisk'
+	);
+	ok(
+		dom.window.document.querySelector( '.kv-panel-save-day' ).href.includes( '20260915' ),
+		'po zmianie dnia adres przycisku jest przeliczony'
+	);
+
+	delete global.window;
+	delete global.document;
+	delete global.MutationObserver;
+	delete global.fetch;
+}
+
 if ( failures.length === 0 ) {
 	process.stdout.write( `OK - ${ passed } asercji przeszlo\n` );
 } else {
