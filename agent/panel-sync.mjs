@@ -347,7 +347,9 @@ export async function collectDays( page, opts = {} ) {
 
 	for ( const { date } of wanted ) {
 		if ( ! ( await openDay( page, date ) ) ) {
-			log( `  ${ date }: nie udało się otworzyć, pomijam.` );
+			const heading = await currentHeading( page );
+
+			log( `  ${ date }: nie udało się otworzyć${ heading ? ` (karta dnia pokazuje „${ heading }”)` : '' }, pomijam.` );
 			continue;
 		}
 
@@ -386,77 +388,110 @@ export async function collectDays( page, opts = {} ) {
 /**
  * Klika w dzien i czeka, az karta dnia faktycznie go pokaze.
  */
+/**
+ * Czy panel pokazuje wlasnie ten dzien. Rozstrzyga naglowek karty dnia,
+ * bo klasa is-selected potrafi zostac na starym kafelku.
+ */
+function showsDay( page, date ) {
+	return page.evaluate( ( expected ) => {
+		var months = [
+			'stycznia', 'lutego', 'marca', 'kwietnia', 'maja', 'czerwca',
+			'lipca', 'sierpnia', 'września', 'października', 'listopada', 'grudnia',
+		];
+
+		var parts = expected.split( '-' );
+		var heading = document.querySelector( '#day-details-date' );
+
+		if ( heading ) {
+			var match = heading.textContent.toLowerCase().match( /(\d{1,2})\s+([a-ząćęłńóśźż]+)/ );
+
+			if ( match ) {
+				var month = months.indexOf( match[ 2 ] ) + 1;
+
+				if ( month === Number( parts[ 1 ] ) && Number( match[ 1 ] ) === Number( parts[ 2 ] ) ) {
+					return true;
+				}
+			}
+		}
+
+		var holders = document.querySelectorAll( '.calendar-slider-items [data-date]' );
+
+		for ( var i = 0; i < holders.length; i++ ) {
+			if ( holders[ i ].querySelector( 'li.day.is-selected' ) ) {
+				return holders[ i ].getAttribute( 'data-date' ) === expected;
+			}
+		}
+
+		return false;
+	}, date );
+}
+
+/** Co panel pokazuje teraz - do komunikatu, gdy dzien sie nie otworzyl. */
+function currentHeading( page ) {
+	return page
+		.locator( '#day-details-date' )
+		.first()
+		.textContent()
+		.then( ( text ) => ( text || '' ).trim() )
+		.catch( () => '' );
+}
+
+async function waitUntilShown( page, date, timeout ) {
+	const deadline = Date.now() + timeout;
+
+	while ( Date.now() < deadline ) {
+		if ( await showsDay( page, date ) ) {
+			return true;
+		}
+
+		await page.waitForTimeout( 200 );
+	}
+
+	return false;
+}
+
+/**
+ * Otwiera dzien w panelu.
+ *
+ * Kalendarz to poziomy suwak (react-indiana-drag-scroll), ktory przy wcisnieciu
+ * przycisku myszy ustawia dzieciom pointer-events: none - prawdziwe klikniecie
+ * potrafi wiec nie dojsc. Dlatego po nieudanej probie wysylamy zdarzenie click
+ * programowo, co omija zarowno przechwytywanie zdarzen, jak i uchwyty przeciagania.
+ */
 async function openDay( page, date ) {
-	// Kafelek niesie wlasciwy uchwyt kliniecia w srodku (role="button").
-	const targets = [
-		page.locator( `#calendar-day-${ date }` ).first(),
-		page.locator( `[data-date="${ date }"] li.day` ).first(),
+	// Dzien moze byc juz otwarty - wtedy nie ma w co klikac.
+	if ( await showsDay( page, date ) ) {
+		return true;
+	}
+
+	const handles = [
+		`#calendar-day-${ date }`,
+		`[data-date="${ date }"] li.day`,
+		`[data-date="${ date }"]`,
 	];
 
-	let clicked = false;
+	for ( const selector of handles ) {
+		const target = page.locator( selector ).first();
 
-	for ( const target of targets ) {
 		if ( 0 === ( await target.count().catch( () => 0 ) ) ) {
 			continue;
 		}
 
-		try {
-			await target.click( { timeout: 5000 } );
-			clicked = true;
-			break;
-		} catch {
-			// Sprobujemy nastepnego uchwytu.
+		await target.click( { timeout: 3000 } ).catch( () => {} );
+
+		if ( await waitUntilShown( page, date, 4000 ) ) {
+			return true;
+		}
+
+		// Klikniecie programowe - ostatnia i najskuteczniejsza proba.
+		await target.dispatchEvent( 'click' ).catch( () => {} );
+
+		if ( await waitUntilShown( page, date, 4000 ) ) {
+			return true;
 		}
 	}
 
-	if ( ! clicked ) {
-		return false;
-	}
-
-	// Potwierdzenie na dwa sposoby: przeskok klasy is-selected ALBO naglowek
-	// karty dnia. Naglowek jest wazniejszy - nie zalezy od klas CSS, ktore
-	// panel moze zmienic.
-	try {
-		await page.waitForFunction(
-			( expected ) => {
-				var months = [
-					'stycznia', 'lutego', 'marca', 'kwietnia', 'maja', 'czerwca',
-					'lipca', 'sierpnia', 'września', 'października', 'listopada', 'grudnia',
-				];
-
-				var heading = document.querySelector( '#day-details-date' );
-
-				if ( heading ) {
-					var match = heading.textContent.toLowerCase().match( /(\d{1,2})\s+([a-ząćęłńóśźż]+)/ );
-
-					if ( match ) {
-						var month = months.indexOf( match[ 2 ] ) + 1;
-						var parts = expected.split( '-' );
-
-						if ( month === Number( parts[ 1 ] ) && Number( match[ 1 ] ) === Number( parts[ 2 ] ) ) {
-							return true;
-						}
-					}
-				}
-
-				var holders = document.querySelectorAll( '.calendar-slider-items [data-date]' );
-
-				for ( var i = 0; i < holders.length; i++ ) {
-					if ( holders[ i ].querySelector( 'li.day.is-selected' ) ) {
-						return holders[ i ].getAttribute( 'data-date' ) === expected;
-					}
-				}
-
-				return false;
-			},
-			date,
-			{ timeout: 8000 }
-		);
-	} catch {
-		return false;
-	}
-
-	return true;
+	return false;
 }
 
 /**

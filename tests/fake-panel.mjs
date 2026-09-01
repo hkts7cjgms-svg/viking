@@ -90,7 +90,7 @@ function loginPage( failed, bannerMode ) {
 </body></html>`;
 }
 
-function dashboardPage( noOrder, sticky ) {
+function dashboardPage( noOrder, sticky, blockPointer ) {
 	const dayTile = ( date ) => `
 		<div data-date="${ date }">
 			<div class="relative inline-block group">
@@ -114,6 +114,9 @@ function dashboardPage( noOrder, sticky ) {
 
 	return `<!doctype html><html lang="pl-PL"><body>
 	<div class="navigation"><p class="navigation-links-title">Panel Kuchnia Vikinga</p></div>
+	${ blockPointer
+		? '<div id="pointerBlocker" style="position:fixed;inset:0;z-index:2147483000;background:transparent"></div>'
+		: '' }
 	<div class="calendar-slider-items">${ DATES.map( dayTile ).join( '' ) }</div>
 	<div id="dayDetailsCard"><div class="card-header"><h3 id="day-details-date"></h3></div>
 		<div class="card-body"><ul class="dashboard-meals-list"></ul></div>
@@ -234,7 +237,7 @@ export function startFakePanel( options = {} ) {
 
 			res.writeHead( 200, { 'Content-Type': 'text/html; charset=utf-8' } );
 
-			return res.end( dashboardPage( Boolean( options.noOrder ), Boolean( options.stickySelection ) ) );
+			return res.end( dashboardPage( Boolean( options.noOrder ), Boolean( options.stickySelection ), Boolean( options.blockPointer ) ) );
 		}
 
 		res.writeHead( 404 );

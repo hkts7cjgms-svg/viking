@@ -236,6 +236,34 @@ const sessionPath = join( dir, 'session.json' );
 	}
 }
 
+// --- prawdziwe klikniecie przechwycone przez nakladke -------------------
+// Suwak kalendarza (react-indiana-drag-scroll) przy wcisnieciu przycisku myszy
+// ustawia dzieciom pointer-events: none, wiec zwykle klikniecie potrafi nie
+// dojsc. Odczyt musi wtedy wyslac zdarzenie click programowo.
+{
+	const blocked = await startFakePanel( { blockPointer: true } );
+
+	try {
+		const days = await withPanel(
+			{
+				panelUrl: blocked.url,
+				user: credentials.user,
+				password: credentials.password,
+				timeout: 20000,
+			},
+			( page ) => collectDays( page, { from: '2026-09-01' } )
+		);
+
+		same( 2, days.length, 'przechwycone kliknięcie nie blokuje odczytu' );
+		same( '2026-09-04', days[ 1 ].date, 'dzień otwarty programowym kliknięciem' );
+		ok( days[ 1 ].meals[ 0 ].description.includes( 'Gulasz' ), 'jadłospis pochodzi z właściwego dnia' );
+	} catch ( error ) {
+		failures.push( `nakładka nad kalendarzem zablokowała odczyt: ${ error.message }` );
+	} finally {
+		blocked.server.close();
+	}
+}
+
 // --- konto bez aktywnego zamowienia -------------------------------------
 // Pulpit jest, kalendarza nie ma. To NIE jest bląd logowania - ma się skończyć
 // pustą listą i zrozumiałym komunikatem, a nie wyjątkiem.
