@@ -130,11 +130,18 @@ const sessionPath = join( dir, 'session.json' );
 	const lunch = days[ 0 ].meals.find( ( meal ) => 'obiad' === meal.slug );
 
 	same(
-		'mąka pszenna, ziemniaki, twaróg, boczek, kapusta kiszona',
-		lunch.details[ 'Skład' ],
-		'skład odczytany z bocznego panelu po kliknięciu'
+		'mąka pszenna, TWARÓG PÓŁTŁUSTY (MLEKO), boczek, CHLEB (GLUTEN), kapusta kiszona',
+		lunch.details[ 'Składniki' ],
+		'skład odczytany z okna szczegółów po kliknięciu'
 	);
-	same( 'gluten, mleko', lunch.details[ 'Alergeny' ], 'alergeny odczytane z bocznego panelu' );
+	// Alergeny panel wyróżnia grubszą czcionką - stąd je bierzemy.
+	same(
+		'TWARÓG PÓŁTŁUSTY (MLEKO), CHLEB (GLUTEN)',
+		lunch.details[ 'Alergeny' ],
+		'alergeny wyłuskane z wyróżnionych składników'
+	);
+	same( 'Na zimno', lunch.details[ 'Podanie' ], 'sposób podania odczytany' );
+	same( '46.7g', lunch.details[ 'Białko' ], 'wartości odżywcze z okna szczegółów' );
 
 	const breakfast = days[ 0 ].meals.find( ( meal ) => 'sniadanie' === meal.slug );
 
@@ -206,8 +213,10 @@ const sessionPath = join( dir, 'session.json' );
 		( page ) => collectDays( page, { from: '2026-09-01' } )
 	);
 
-	same( 2, unbounded.length, 'bez górnej granicy bierzemy wszystkie dni z jadłospisem' );
-	same( '2026-09-04', unbounded[ 1 ].date, 'ostatni dzień jadłospisu nie wypada za burtę' );
+	// Bez granicy siegamy takze do nastepnego miesiaca - stad trzy dni, nie dwa.
+	same( 3, unbounded.length, 'bez górnej granicy bierzemy wszystkie dni z jadłospisem' );
+	same( '2026-09-04', unbounded[ 1 ].date, 'ostatni dzień bieżącego miesiąca nie wypada za burtę' );
+	same( '2026-10-01', unbounded[ 2 ].date, 'zakres bez granicy obejmuje następny miesiąc' );
 }
 
 // --- panel nie przesuwa is-selected -------------------------------------
@@ -225,7 +234,7 @@ const sessionPath = join( dir, 'session.json' );
 				password: credentials.password,
 				timeout: 15000,
 			},
-			( page ) => collectDays( page, { from: '2026-09-01' } )
+			( page ) => collectDays( page, { from: '2026-09-01', maxMonths: 1 } )
 		);
 
 		same( 2, days.length, 'dni zbierane mimo nieruchomej klasy is-selected' );
@@ -258,7 +267,7 @@ const sessionPath = join( dir, 'session.json' );
 				password: credentials.password,
 				timeout: 20000,
 			},
-			( page ) => collectDays( page, { from: '2026-09-01' } )
+			( page ) => collectDays( page, { from: '2026-09-01', maxMonths: 1 } )
 		);
 
 		same( 2, days.length, 'przechwycone kliknięcie nie blokuje odczytu' );
@@ -285,7 +294,7 @@ const sessionPath = join( dir, 'session.json' );
 				password: credentials.password,
 				timeout: 20000,
 			},
-			( page ) => collectDays( page, { from: '2026-09-01', mealsTimeout: 2500 } )
+			( page ) => collectDays( page, { from: '2026-09-01', mealsTimeout: 2500, maxMonths: 1 } )
 		);
 
 		same( 2, days.length, 'ponowna próba ratuje dzień, który nie doczytał się za pierwszym razem' );
@@ -315,7 +324,7 @@ const sessionPath = join( dir, 'session.json' );
 				password: credentials.password,
 				timeout: 20000,
 			},
-			( page ) => collectDays( page, { from: '2026-09-01', mealsTimeout: 3000 } )
+			( page ) => collectDays( page, { from: '2026-09-01', mealsTimeout: 3000, maxMonths: 1 } )
 		);
 
 		same( 2, days.length, 'dzień poza widokiem suwaka też jest pobierany' );
@@ -326,6 +335,23 @@ const sessionPath = join( dir, 'session.json' );
 	} finally {
 		narrow.server.close();
 	}
+}
+
+// --- jadlospis siegajacy nastepnego miesiaca ----------------------------
+// Kalendarz pokazuje jeden miesiac naraz. Pod koniec miesiaca czesc dni
+// zamowienia lezy juz w kolejnym - bez przejscia strzalka zostalyby pominiete.
+{
+	const days = await withPanel(
+		{ panelUrl: url, user: credentials.user, password: credentials.password, timeout: 20000 },
+		( page ) => collectDays( page, { from: '2026-09-01', details: false } )
+	);
+
+	same( 3, days.length, 'dni z następnego miesiąca też są pobierane' );
+	same( '2026-10-01', days[ 2 ].date, 'ostatni dzień pochodzi z października' );
+	ok(
+		days[ 2 ].meals[ 0 ].description.includes( 'Zupa dyniowa' ),
+		'jadłospis z następnego miesiąca jest prawdziwy, nie skopiowany'
+	);
 }
 
 // --- konto bez aktywnego zamowienia -------------------------------------

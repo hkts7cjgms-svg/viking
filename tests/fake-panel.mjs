@@ -15,15 +15,25 @@ const MENU = {
 		[ 4204327, 'Kolacja', 'Tacos z szarpaną wieprzowiną z chili', 533 ],
 	],
 	'2026-09-04': [ [ 4204330, 'Obiad', 'Gulasz wieprzowy z kaszą gryczaną', 612 ] ],
+	'2026-10-01': [ [ 4204340, 'Obiad', 'Zupa dyniowa z grzankami', 430 ] ],
 };
 
 // 2026-09-02 jest is-disabled, a mimo to ma pelny jadlospis - dokladnie jak w panelu.
 const DISABLED = [ '2026-09-01', '2026-09-02', '2026-09-03' ];
-const LABELS = { '2026-09-02': 'Zobacz', '2026-09-04': 'Edytuj' };
+const LABELS = { '2026-09-02': 'Zobacz', '2026-09-04': 'Edytuj', '2026-10-01': 'Edytuj' };
 const DATES = [ '2026-09-01', '2026-09-02', '2026-09-03', '2026-09-04' ];
 
+// Drugi miesiac - kalendarz pokazuje jeden naraz, a jadlospis potrafi siegac dalej.
+const NEXT_DATES = [ '2026-10-01', '2026-10-02' ];
+
+// Skladniki jak w prawdziwym oknie panelu: alergeny wyroznione font-medium.
 const DETAILS = {
-	4204326: 'Skład|mąka pszenna, ziemniaki, twaróg, boczek, kapusta kiszona::Alergeny|gluten, mleko',
+	4204326:
+		'<span class="inline">mąka pszenna, </span>' +
+		'<span class="inline font-medium">TWARÓG PÓŁTŁUSTY (MLEKO), </span>' +
+		'<span class="inline">boczek, </span>' +
+		'<span class="inline font-medium">CHLEB (GLUTEN), </span>' +
+		'<span class="inline">kapusta kiszona</span>',
 };
 
 function loginPage( failed, bannerMode ) {
@@ -117,6 +127,10 @@ function dashboardPage( noOrder, sticky, blockPointer, flaky, narrow ) {
 	${ blockPointer
 		? '<div id="pointerBlocker" style="position:fixed;inset:0;z-index:2147483000;background:transparent"></div>'
 		: '' }
+	<div class="calendar-header">
+		<h3 id="calendar-current-month">Wrzesień 2026</h3>
+		<span id="calendar-next-month" role="button" tabindex="0">→</span>
+	</div>
 	<div class="calendar-slider" style="${ narrow ? 'width:160px;overflow-x:auto;white-space:nowrap' : '' }">
 		<div class="calendar-slider-items" style="${ narrow ? 'display:inline-flex;width:max-content' : '' }">${ DATES.map( dayTile ).join( '' ) }</div>
 	</div>
@@ -191,11 +205,22 @@ function dashboardPage( noOrder, sticky, blockPointer, flaky, narrow ) {
 				li.querySelector( '.meal-content' ).addEventListener( 'click', function () {
 					var raw = DETAILS[ meal[ 0 ] ];
 					var sidebar = document.getElementById( 'sideBar' );
-					if ( ! raw ) { sidebar.innerHTML = '<div>' + meal[ 2 ] + '</div>'; return; }
-					sidebar.innerHTML = raw.split( '::' ).map( function ( part ) {
-						var pieces = part.split( '|' );
-						return '<h3 class="h300">' + pieces[ 0 ] + '</h3><div>' + pieces[ 1 ] + '</div>';
-					} ).join( '' );
+
+					if ( ! raw ) {
+						sidebar.innerHTML = '<div>' + meal[ 2 ] + '</div>';
+						return;
+					}
+
+					// Struktura 1:1 z prawdziwego okna szczegolow posilku.
+					sidebar.innerHTML =
+						'<div class="bg-white">' +
+						'<div class="_cold_1xxbd_53">Na zimno</div>' +
+						'<p class="font-medium">' + meal[ 3 ] + ' kcal / 2005 kJ</p>' +
+						'<ul><li><span>Białko</span><span>46.7g</span></li>' +
+						'<li><span>Sól</span><span>1.6g</span></li></ul>' +
+						'<div class="details-ingredients"><div>Składniki</div>' +
+						'<p>' + raw + '</p></div>' +
+						'</div>';
 				} );
 				list.appendChild( li );
 			} );
@@ -208,18 +233,48 @@ function dashboardPage( noOrder, sticky, blockPointer, flaky, narrow ) {
 
 		// Otwierac mozna kazdy dzien z etykieta - takze ten z klasa is-disabled,
 		// dokladnie jak w prawdziwym panelu. Uchwytem jest wewnetrzny role="button".
-		document.querySelectorAll( '.calendar-slider-items li.day' ).forEach( function ( li ) {
-			var date = li.closest( '[data-date]' ).getAttribute( 'data-date' );
-			var label = li.querySelector( '.day-label' );
+		function bindDays() {
+			document.querySelectorAll( '.calendar-slider-items li.day' ).forEach( function ( li ) {
+				var date = li.closest( '[data-date]' ).getAttribute( 'data-date' );
+				var label = li.querySelector( '.day-label' );
 
-			if ( ! label || ! label.textContent.trim() ) {
-				return;
-			}
+				if ( ! label || ! label.textContent.trim() || li.dataset.bound ) {
+					return;
+				}
 
-			li.querySelector( '#calendar-day-' + date ).addEventListener( 'click', function () {
-				// Opoznienie jak w SPA - przelaczenie dnia nie jest natychmiastowe.
-				setTimeout( function () { render( date ); }, 120 );
+				li.dataset.bound = '1';
+
+				li.querySelector( '#calendar-day-' + date ).addEventListener( 'click', function () {
+					// Opoznienie jak w SPA - przelaczenie dnia nie jest natychmiastowe.
+					setTimeout( function () { render( date ); }, 120 );
+				} );
 			} );
+		}
+
+		bindDays();
+
+		var NEXT_DATES = ${ JSON.stringify( NEXT_DATES ) };
+		var LABELS = ${ JSON.stringify( LABELS ) };
+		var DISABLED = ${ JSON.stringify( DISABLED ) };
+
+		function tile( date ) {
+			var label = LABELS[ date ] || '';
+
+			return '<div data-date="' + date + '"><div class="relative inline-block group">' +
+				'<li class="day' + ( DISABLED.indexOf( date ) > -1 ? ' is-disabled' : '' ) +
+				( label ? ' is-active' : '' ) + '">' +
+				'<div data-date="' + date + '" id="calendar-day-' + date + '" role="button" tabindex="0">' +
+				'<div class="day-header"><div class="h300 day-number">' + Number( date.slice( 8 ) ) + '</div></div>' +
+				'<div class="day-label">' + label + '</div></div></li></div></div>';
+		}
+
+		document.getElementById( 'calendar-next-month' ).addEventListener( 'click', function () {
+			setTimeout( function () {
+				document.getElementById( 'calendar-current-month' ).textContent = 'Październik 2026';
+				document.querySelector( '.calendar-slider-items' ).innerHTML =
+					NEXT_DATES.map( tile ).join( '' );
+				bindDays();
+			}, 150 );
 		} );
 
 		render( '2026-09-02', true );

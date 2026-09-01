@@ -18,7 +18,13 @@
 import { existsSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 
-import { extractDates, extractDay, extractDayHeading, extractSidebarDetails } from './panel-scrape.mjs';
+import {
+	extractDates,
+	extractDay,
+	extractDayHeading,
+	extractMonthLabel,
+	extractSidebarDetails,
+} from './panel-scrape.mjs';
 
 const SELECTORS = {
 	user: '#username',
@@ -30,7 +36,10 @@ const SELECTORS = {
 	mealContent: '.meal-content',
 	mealCard: 'ul.dashboard-meals-list > li.enhanced-meal-card',
 	calendar: '.calendar-slider-items',
-	sidebar: '#sideBar',
+	// Okno szczegolow posilku - najpewniejszy punkt zaczepienia to lista skladnikow.
+	details: '.details-ingredients, #sideBar',
+	nextMonth: '#calendar-next-month',
+	monthLabel: '#calendar-current-month',
 	loginForm: '#username',
 };
 
@@ -293,152 +302,113 @@ async function loginFailureReason( page ) {
  * @param {object} page Strona Playwrighta.
  * @param {object} opts { from, to, details, log }
  */
-export async function collectDays( page, opts = {} ) {
-	const log = opts.log || ( () => {} );
-
-	// Kalendarz mogl jeszcze nie doczytac sie zaraz po zalogowaniu - czekamy
-	// dopiero tutaj, czyli w chwili, w ktorej jest faktycznie potrzebny.
-	await page
-		.waitForSelector( SELECTORS.calendar, { timeout: opts.calendarTimeout || 20000, state: 'attached' } )
-		.catch( () => {} );
-
-	const calendar = await page.evaluate( extractDates );
-	const all = calendar.days || [];
-
-	if ( 0 === all.length ) {
-		log( 'Kalendarz jest pusty — panel nie pokazał żadnego dnia. Czy zamówienie jest aktywne?' );
-
-		return [];
-	}
-
-	const inRange = all.filter( ( day ) => {
-		if ( opts.from && day.date < opts.from ) {
-			return false;
-		}
-
-		return ! ( opts.to && day.date > opts.to );
-	} );
-
-	// Dzien "ma co pokazac", gdy niesie etykietę (Zobacz / Edytuj) albo jest aktywny.
-	// Klasa is-disabled NIE dyskwalifikuje - w tym panelu znaczy tylko tyle, że
-	// zamówienia na ten dzień nie da się już zmienić.
-	let wanted = inRange.filter( ( day ) => '' !== day.label || day.isActive );
-
-	if ( 0 === wanted.length && inRange.length ) {
-		// Panel mógł zmienić wygląd - lepiej spróbować wszystkich niż nic nie pobrać.
-		log( 'Żaden dzień nie ma etykiety — próbuję otworzyć wszystkie dni z zakresu.' );
-		wanted = inRange;
-	}
-
-	log(
-		`Kalendarz: ${ all.length } dni, w zakresie ${ inRange.length }, ` +
-			`z jadłospisem do sprawdzenia ${ wanted.length }.`
-	);
-
-	if ( 0 === wanted.length ) {
-		const first = all[ 0 ]?.date;
-		const last = all[ all.length - 1 ]?.date;
-
-		log( `Panel pokazuje dni ${ first } … ${ last } — poza zakresem ${ opts.from } … ${ opts.to }.` );
-		log( 'Podpowiedź: rozszerz zakres, np. --from ' + first + ' --to ' + last );
-	}
-
-	const days = [];
-	const skipped = [];
-
-	for ( const { date } of wanted ) {
-		// Dzien juz otwarty nie przeladowuje listy - nie ma na co czekac.
-		const alreadyOpen = await showsDay( page, date );
-		const before = alreadyOpen ? null : await mealSignature( page );
-
-		if ( ! ( await openDay( page, date ) ) ) {
-			const heading = await currentHeading( page );
-
-			log( `  ${ date }: nie udało się otworzyć${ heading ? ` (karta dnia pokazuje „${ heading }”)` : '' }, pomijam.` );
-			continue;
-		}
-
-		const mealsTimeout = opts.mealsTimeout || 15000;
-
-		if ( alreadyOpen ) {
-			// Dzien moze byc otwarty, a posilki wciaz sie doczytywac.
-			await waitForAnyMeals( page, mealsTimeout );
-		} else {
-			let freshness = await waitForFreshMeals( page, before, mealsTimeout );
-
-			// Jedna ponowna proba: panel bywa wolniejszy przy dalszych dniach,
-			// a przeoczony dzien to strata calego jadlospisu z tej daty.
-			// Probujemy takze przy pustej liscie - dzien z etykieta powinien
-			// miec posilki, wiec pustka rownie dobrze moze byc nieudanym odczytem.
-			if ( 'swieze' !== freshness ) {
-				log( `  ${ date }: lista się nie odświeżyła, próbuję jeszcze raz…` );
-
-				const tile = page.locator( `#calendar-day-${ date }` ).first();
-
-				await tile.scrollIntoViewIfNeeded( { timeout: 3000 } ).catch( () => {} );
-				await page.waitForTimeout( 400 );
-				await tile.click( { timeout: 3000 } ).catch( () => {} );
-				await tile.dispatchEvent( 'click' ).catch( () => {} );
-
-				freshness = await waitForFreshMeals( page, before, mealsTimeout );
-			}
-
-			if ( 'nieodswiezone' === freshness ) {
-				// Panel zostawil na ekranie dania poprzedniego dnia. W praktyce
-				// znaczy to, ze na ten dzien nie ma jeszcze jadlospisu: catering
-				// publikuje menu z wyprzedzeniem kilkunastu dni. Zapisanie tego,
-				// co widac, wpisaloby cudze dania pod ta date.
-				skipped.push( date );
-				log( `  ${ date }: jadłospis jeszcze nieopublikowany, pomijam.` );
-				continue;
-			}
-		}
-
-		const day = await page.evaluate( extractDay );
-
-		if ( day.date !== date ) {
-			// extractDay czyta date z klasy is-selected. Gdy panel jej nie
-			// przesuwa, rozstrzyga naglowek karty dnia.
-			const heading = await page.evaluate( extractDayHeading );
-			const [ , month, dayOfMonth ] = date.split( '-' ).map( Number );
-
-			if ( ! heading || heading.month !== month || heading.day !== dayOfMonth ) {
-				log( `  ${ date }: panel pokazał ${ day.date || 'nieznany dzień' }, pomijam.` );
-				continue;
-			}
-
-			day.date = date;
-		}
-
-		if ( 0 === day.meals.length ) {
-			log( `  ${ date }: brak posiłków (dzień bez dostawy).` );
-			continue;
-		}
-
-		if ( opts.details ) {
-			await addMealDetails( page, day, log );
-		}
-
-		log( `  ${ date }: ${ day.meals.length } posiłków.` );
-		days.push( day );
-
-		// Chwila oddechu miedzy dniami - panel odpowiada wtedy pewniej.
-		await page.waitForTimeout( 300 );
-	}
-
-	if ( skipped.length ) {
-		log(
-			`Pominięto ${ skipped.length } dni bez opublikowanego jadłospisu: ${ skipped.join( ', ' ) }.`
-		);
-		log( 'Dojdą same, gdy catering je opublikuje — kolejne uruchomienia je dobiorą.' );
-	}
-
-	return days;
+/**
+ * Panel wstawia karty w rodzaju "Śniadanie - brak menu", gdy jadlospisu na dany
+ * dzien jeszcze nie ma. To nie jest posilek i nie moze trafic do kalendarza.
+ */
+function isPlaceholderMeal( meal ) {
+	return /brak\s+menu/i.test( String( meal?.description || '' ) );
 }
 
 /**
- * Klika w dzien i czeka, az karta dnia faktycznie go pokaze.
+ * Odcisk listy posilkow: identyfikatory kart. Kazdy posilek ma wlasny numer,
+ * wiec dwa rozne dni nigdy nie daja tego samego odcisku.
  */
+function mealSignature( page ) {
+	return page.evaluate( () => {
+		var cards = document.querySelectorAll( 'ul.dashboard-meals-list > li.enhanced-meal-card' );
+		var ids = [];
+
+		for ( var i = 0; i < cards.length; i++ ) {
+			ids.push( cards[ i ].id );
+		}
+
+		return ids.join( ',' );
+	} );
+}
+
+/**
+ * Czeka, az panel doczyta posilki NOWEGO dnia.
+ *
+ * Naglowek karty zmienia sie natychmiast, a lista posilkow chwile pozniej -
+ * przez ten czas na ekranie wisza jeszcze dania z poprzedniego dnia. Czytanie
+ * ich w tym momencie zapisaloby cudzy jadlospis pod zla data.
+ *
+ * @returns {Promise<'swieze'|'puste'|'nieodswiezone'>}
+ */
+async function waitForFreshMeals( page, before, timeout ) {
+	const deadline = Date.now() + timeout;
+	let current = '';
+
+	while ( Date.now() < deadline ) {
+		current = await mealSignature( page );
+
+		if ( current && current !== before ) {
+			return 'swieze';
+		}
+
+		await page.waitForTimeout( 200 );
+	}
+
+	// Pusta lista po odczekaniu to uczciwy brak dostawy.
+	return '' === current ? 'puste' : 'nieodswiezone';
+}
+
+/**
+ * Czeka na jakiekolwiek posilki. Dla dnia juz otwartego wystarczy - nie ma
+ * poprzedniej listy, z ktora mozna by je pomylic.
+ */
+async function waitForAnyMeals( page, timeout ) {
+	const deadline = Date.now() + timeout;
+
+	while ( Date.now() < deadline ) {
+		if ( await mealSignature( page ) ) {
+			return true;
+		}
+
+		await page.waitForTimeout( 200 );
+	}
+
+	return false;
+}
+
+/**
+ * Przechodzi do nastepnego miesiaca w kalendarzu.
+ *
+ * Kalendarz pokazuje jeden miesiac naraz, a jadlospis siega okolo dwoch tygodni
+ * do przodu - pod koniec miesiaca czesc dni lezy juz w kolejnym.
+ */
+async function goToNextMonth( page, log ) {
+	const before = await page.evaluate( extractMonthLabel );
+	const arrow = page.locator( SELECTORS.nextMonth ).first();
+
+	if ( 0 === ( await arrow.count().catch( () => 0 ) ) ) {
+		return false;
+	}
+
+	await arrow.click( { timeout: 3000 } ).catch( () => {} );
+	await arrow.dispatchEvent( 'click' ).catch( () => {} );
+
+	try {
+		await page.waitForFunction(
+			( previous ) => {
+				var node = document.querySelector( '#calendar-current-month' );
+
+				return Boolean( node ) && node.textContent.replace( /\s+/g, ' ' ).trim() !== previous;
+			},
+			before,
+			{ timeout: 8000 }
+		);
+	} catch {
+		return false;
+	}
+
+	log( `Przechodzę do następnego miesiąca: ${ await page.evaluate( extractMonthLabel ) }` );
+	await page.waitForTimeout( 500 );
+
+	return true;
+}
+
 /**
  * Czy panel pokazuje wlasnie ten dzien. Rozstrzyga naglowek karty dnia,
  * bo klasa is-selected potrafi zostac na starym kafelku.
@@ -477,69 +447,6 @@ function showsDay( page, date ) {
 	}, date );
 }
 
-/**
- * Odcisk listy posilkow: identyfikatory kart. Kazdy posilek ma wlasny numer,
- * wiec dwa rozne dni nigdy nie daja tego samego odcisku.
- */
-function mealSignature( page ) {
-	return page.evaluate( () => {
-		var cards = document.querySelectorAll( 'ul.dashboard-meals-list > li.enhanced-meal-card' );
-		var ids = [];
-
-		for ( var i = 0; i < cards.length; i++ ) {
-			ids.push( cards[ i ].id );
-		}
-
-		return ids.join( ',' );
-	} );
-}
-
-/**
- * Czeka, az panel doczyta posilki NOWEGO dnia.
- *
- * Naglowek karty zmienia sie natychmiast, a lista posilkow chwile pozniej -
- * przez ten czas na ekranie wisza jeszcze dania z poprzedniego dnia. Czytanie
- * ich w tym momencie zapisaloby cudzy jadlospis pod zla data.
- *
- * @returns {'swieze'|'puste'|'nieodswiezone'}
- */
-async function waitForFreshMeals( page, before, timeout ) {
-	const deadline = Date.now() + timeout;
-	let current = '';
-
-	while ( Date.now() < deadline ) {
-		current = await mealSignature( page );
-
-		if ( current && current !== before ) {
-			return 'swieze';
-		}
-
-		await page.waitForTimeout( 200 );
-	}
-
-	// Pusta lista po odczekaniu to uczciwy brak dostawy.
-	return '' === current ? 'puste' : 'nieodswiezone';
-}
-
-/**
- * Czeka na jakiekolwiek posilki. Dla dnia juz otwartego wystarczy - nie ma
- * poprzedniej listy, z ktora mozna by je pomylic. Pusto po odczekaniu to
- * uczciwa odpowiedz: tego dnia nie ma dostawy.
- */
-async function waitForAnyMeals( page, timeout ) {
-	const deadline = Date.now() + timeout;
-
-	while ( Date.now() < deadline ) {
-		if ( await mealSignature( page ) ) {
-			return true;
-		}
-
-		await page.waitForTimeout( 200 );
-	}
-
-	return false;
-}
-
 /** Co panel pokazuje teraz - do komunikatu, gdy dzien sie nie otworzyl. */
 function currentHeading( page ) {
 	return page
@@ -562,6 +469,193 @@ async function waitUntilShown( page, date, timeout ) {
 	}
 
 	return false;
+}
+
+export async function collectDays( page, opts = {} ) {
+	const log = opts.log || ( () => {} );
+
+	// Kalendarz mogl jeszcze nie doczytac sie zaraz po zalogowaniu - czekamy
+	// dopiero tutaj, czyli w chwili, w ktorej jest faktycznie potrzebny.
+	await page
+		.waitForSelector( SELECTORS.calendar, { timeout: opts.calendarTimeout || 20000, state: 'attached' } )
+		.catch( () => {} );
+
+	const days = [];
+	const skipped = [];
+	const processed = new Set();
+	const maxMonths = opts.maxMonths || 3;
+
+	for ( let month = 0; month < maxMonths; month++ ) {
+		const calendar = await page.evaluate( extractDates );
+		const all = calendar.days || [];
+
+		if ( 0 === all.length ) {
+			log( 'Kalendarz jest pusty — panel nie pokazał żadnego dnia. Czy zamówienie jest aktywne?' );
+			break;
+		}
+
+		const inRange = all.filter( ( day ) => {
+			if ( processed.has( day.date ) ) {
+				return false;
+			}
+
+			if ( opts.from && day.date < opts.from ) {
+				return false;
+			}
+
+			return ! ( opts.to && day.date > opts.to );
+		} );
+
+		// Dzien "ma co pokazac", gdy niesie etykietę (Zobacz / Edytuj) albo jest
+		// aktywny. Klasa is-disabled NIE dyskwalifikuje - w tym panelu znaczy
+		// tylko tyle, że zamówienia na ten dzień nie da się już zmienić.
+		let wanted = inRange.filter( ( day ) => '' !== day.label || day.isActive );
+
+		if ( 0 === wanted.length && inRange.length && 0 === month ) {
+			// Panel mógł zmienić wygląd - lepiej spróbować wszystkich niż nic nie pobrać.
+			log( 'Żaden dzień nie ma etykiety — próbuję otworzyć wszystkie dni z zakresu.' );
+			wanted = inRange;
+		}
+
+		log(
+			`${ await page.evaluate( extractMonthLabel ) || 'Kalendarz' }: ` +
+				`${ all.length } dni, w zakresie ${ inRange.length }, do sprawdzenia ${ wanted.length }.`
+		);
+
+		for ( const { date } of wanted ) {
+			processed.add( date );
+
+			const day = await collectSingleDay( page, date, { ...opts, log } );
+
+			if ( 'pominiety' === day ) {
+				skipped.push( date );
+				continue;
+			}
+
+			if ( day ) {
+				days.push( day );
+			}
+		}
+
+		// Jadlospis siega poza biezacy miesiac tylko wtedy, gdy zamowienie trwa
+		// do jego konca - inaczej nie ma po co przewijac kalendarza dalej.
+		const last = all[ all.length - 1 ];
+		const continues = last && ( '' !== last.label || last.isActive );
+
+		if ( ! continues || ( opts.to && last.date >= opts.to ) ) {
+			break;
+		}
+
+		if ( ! ( await goToNextMonth( page, log ) ) ) {
+			break;
+		}
+	}
+
+	if ( skipped.length ) {
+		log( `Pominięto ${ skipped.length } dni bez opublikowanego jadłospisu: ${ skipped.join( ', ' ) }.` );
+		log( 'Dojdą same, gdy catering je opublikuje — kolejne uruchomienia je dobiorą.' );
+	}
+
+	return days;
+}
+
+/**
+ * Otwiera jeden dzien i czyta z niego jadlospis.
+ *
+ * @returns {Promise<object|'pominiety'|null>} Dzien, znacznik pominiecia
+ *   (jadlospis nieopublikowany) albo null, gdy dnia nie dalo sie otworzyc.
+ */
+async function collectSingleDay( page, date, opts ) {
+	const log = opts.log;
+
+	// Dzien juz otwarty nie przeladowuje listy - nie ma na co czekac.
+	const alreadyOpen = await showsDay( page, date );
+	const before = alreadyOpen ? null : await mealSignature( page );
+
+	if ( ! ( await openDay( page, date ) ) ) {
+		const heading = await currentHeading( page );
+
+		log( `  ${ date }: nie udało się otworzyć${ heading ? ` (karta dnia pokazuje „${ heading }”)` : '' }, pomijam.` );
+
+		return null;
+	}
+
+	const mealsTimeout = opts.mealsTimeout || 15000;
+
+	if ( alreadyOpen ) {
+		// Dzien moze byc otwarty, a posilki wciaz sie doczytywac.
+		await waitForAnyMeals( page, mealsTimeout );
+	} else {
+		let freshness = await waitForFreshMeals( page, before, mealsTimeout );
+
+		// Jedna ponowna proba: panel bywa wolniejszy przy dalszych dniach,
+		// a przeoczony dzien to strata calego jadlospisu z tej daty.
+		// Probujemy takze przy pustej liscie - dzien z etykieta powinien miec
+		// posilki, wiec pustka rownie dobrze moze byc nieudanym odczytem.
+		if ( 'swieze' !== freshness ) {
+			log( `  ${ date }: lista się nie odświeżyła, próbuję jeszcze raz…` );
+
+			const tile = page.locator( `#calendar-day-${ date }` ).first();
+
+			await tile.scrollIntoViewIfNeeded( { timeout: 3000 } ).catch( () => {} );
+			await page.waitForTimeout( 400 );
+			await tile.click( { timeout: 3000 } ).catch( () => {} );
+			await tile.dispatchEvent( 'click' ).catch( () => {} );
+
+			freshness = await waitForFreshMeals( page, before, mealsTimeout );
+		}
+
+		if ( 'nieodswiezone' === freshness ) {
+			// Panel zostawil na ekranie dania poprzedniego dnia. Zapisanie tego,
+			// co widac, wpisaloby cudze dania pod ta date.
+			log( `  ${ date }: jadłospis jeszcze nieopublikowany, pomijam.` );
+
+			return 'pominiety';
+		}
+	}
+
+	const day = await page.evaluate( extractDay );
+
+	if ( day.date !== date ) {
+		// extractDay czyta date z klasy is-selected. Gdy panel jej nie
+		// przesuwa, rozstrzyga naglowek karty dnia.
+		const heading = await page.evaluate( extractDayHeading );
+		const [ , month, dayOfMonth ] = date.split( '-' ).map( Number );
+
+		if ( ! heading || heading.month !== month || heading.day !== dayOfMonth ) {
+			log( `  ${ date }: panel pokazał ${ day.date || 'nieznany dzień' }, pomijam.` );
+
+			return null;
+		}
+
+		day.date = date;
+	}
+
+	// Karty w rodzaju "Obiad - brak menu" to zapowiedz posilku, nie posilek.
+	const placeholders = day.meals.filter( isPlaceholderMeal ).length;
+
+	day.meals = day.meals.filter( ( meal ) => ! isPlaceholderMeal( meal ) );
+
+	if ( 0 === day.meals.length ) {
+		log(
+			placeholders
+				? `  ${ date }: jadłospis jeszcze nieopublikowany (brak menu), pomijam.`
+				: `  ${ date }: brak posiłków (dzień bez dostawy).`
+		);
+
+		return placeholders ? 'pominiety' : null;
+	}
+
+	if ( false !== opts.details ) {
+		await addMealDetails( page, day, log );
+	}
+
+	log( `  ${ date }: ${ day.meals.length } posiłków.` );
+
+	// Chwila oddechu miedzy dniami - panel odpowiada wtedy pewniej.
+	await page.waitForTimeout( 300 );
+
+	return day;
 }
 
 /**
@@ -638,16 +732,24 @@ async function addMealDetails( page, day, log ) {
 
 					return Boolean( node ) && node.textContent.trim().length > 0;
 				},
-				SELECTORS.sidebar,
-				{ timeout: 5000 }
+				SELECTORS.details,
+				{ timeout: 6000 }
 			);
 
 			day.meals[ index ].details = await page.evaluate( extractSidebarDetails );
 		} catch {
 			log( `    ${ day.date } / ${ day.meals[ index ].slug }: nie udało się odczytać szczegółów.` );
 		} finally {
-			await page.keyboard.press( 'Escape' );
-			await page.waitForTimeout( 250 );
+			// Zamykamy krzyzykiem, a gdy go nie ma - Escapem. Nic innego w tym
+			// oknie nie jest klikane: sa tu akcje zmieniajace zamowienie.
+			const close = page.locator( '[role="button"] i.fa-times, [role="button"] .fa-times' ).first();
+
+			if ( 0 < ( await close.count().catch( () => 0 ) ) ) {
+				await close.click( { timeout: 2000 } ).catch( () => {} );
+			}
+
+			await page.keyboard.press( 'Escape' ).catch( () => {} );
+			await page.waitForTimeout( 300 );
 		}
 	}
 }

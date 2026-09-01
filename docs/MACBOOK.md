@@ -159,26 +159,48 @@ Wiersze nie znikają. Zmieniony posiłek jest nadpisywany, a kolumna
 zmieniła, znacznik zostaje stary. Ręczne dopiski w pliku też przetrwają
 kolejną synchronizację (jest na to test).
 
-## Szczegóły posiłku z okna, które wyskakuje
+## Ile dni się pobiera
 
-Domyślnie **wyłączone**. Włącza je flaga:
+Tyle, ile catering opublikował — zwykle około dwóch tygodni do przodu.
+
+**Przełom miesiąca jest obsłużony.** Kalendarz w panelu pokazuje jeden miesiąc
+naraz, więc gdy dziś jest 25 września, część jadłospisu leży już w październiku.
+Skrypt sam klika strzałkę „następny miesiąc" i pobiera także tamte dni. Sięga do
+trzech miesięcy do przodu, ale przewija dalej tylko wtedy, gdy zamówienie
+faktycznie trwa do końca bieżącego miesiąca.
+
+**Dni bez menu są pomijane.** Gdy panel pokazuje karty w rodzaju
+`Śniadanie - brak menu`, taki dzień nie trafia ani do kalendarza, ani do CSV —
+to zapowiedź posiłku, nie posiłek. Dojdzie sam, gdy catering opublikuje menu.
+
+Dlaczego pomijany, a nie zapisywany jako pusty: panel zostawia wtedy na ekranie
+dania z poprzedniego dnia. Zapisanie tego, co widać, wpisałoby obiad
+z 16 września pod datę 17 września — po cichu, bez żadnego błędu.
+
+## Szczegóły posiłku — składniki i alergeny
+
+Zbierane **domyślnie**. Skrypt otwiera okno każdego dania i wyciąga z niego:
+
+| Pole | Przykład |
+| --- | --- |
+| Składniki | Schab wieprzowy, TWARÓG PÓŁTŁUSTY (MLEKO), Pomidor, CHLEB WIEJSKI (GLUTEN)… |
+| Alergeny | TWARÓG PÓŁTŁUSTY (MLEKO), CHLEB WIEJSKI (GLUTEN) |
+| Podanie | Na zimno |
+| Energia | 479 kcal / 2005 kJ |
+| Wartości odżywcze | Białko, Tłuszcz, Węglowodany, Błonnik, Cukry, Sól, NKT |
+
+Alergeny są wyłuskiwane z tych składników, które panel wyróżnia grubszą czcionką
+(pisane wielkimi literami, zgodnie z etykietowaniem żywności).
+
+Wchodzenie w każde danie wydłuża przebieg. Gdy zależy Ci na czasie:
 
 ```bash
-node agent/sync-to-calendar.mjs --details
+node agent/sync-to-calendar.mjs --no-details
 ```
 
-Wtedy skrypt klika w każdy posiłek, czeka aż wysunie się boczny panel i zbiera
-z niego tekst — trafia on do kolumn `skladniki` i `alergeny` oraz do opisu wpisu
-w kalendarzu.
-
-**Dlaczego to nie jest domyślne.** Nie znam jeszcze struktury tego panelu, więc
-skrypt bierze jego tekst i próbuje rozpoznać nagłówki; gdy się nie uda, zapisuje
-całość surowo. Wklej mi kod HTML tego okna, a rozbiorę go na konkretne pola.
-
-**Bezpiecznik.** W tej aplikacji są akcje zmieniające zamówienie, więc skrypt
-robi tam dokładnie dwie rzeczy: klika w opis dania i zamyka panel klawiszem
-Escape. **Niczego wewnątrz panelu nie klika.** Mimo to pierwszy raz uruchom to
-z `--dry-run` i `KV_HEADLESS=0`, żeby zobaczyć na własne oczy, co się dzieje.
+**Bezpiecznik.** W oknie szczegółów są też akcje zmieniające zamówienie, więc
+skrypt robi tam dokładnie dwie rzeczy: otwiera okno klikając w opis dania
+i zamyka je krzyżykiem albo Escapem. Niczego innego nie dotyka.
 
 ## Starszy macOS (12 Monterey i okolice)
 
@@ -187,24 +209,15 @@ Wszystko da się uruchomić, ale trzy rzeczy robi się inaczej:
 
 **1. Node.** Jeśli `brew install node` się wywali (na starym systemie Homebrew
 buduje ze źródeł i to potrafi paść), pobierz instalator wprost:
-[nodejs.org](https://nodejs.org) → **LTS** → plik `.pkg` → dwuklik, dalej, dalej.
-Node LTS działa na macOS 12 bez problemu.
+[nodejs.org](https://nodejs.org) → **22 LTS** → plik `.pkg`. Node 22 wspiera
+macOS 11 i nowsze; wersje 24+ wymagają już macOS 13.5.
 
-**2. Ścieżki.** Na Macach z procesorem Intel (instalacja w `/usr/local`) node
-ląduje w `/usr/local/bin/node` — i taką ścieżkę wpisz w pliku launchd zamiast
-`/opt/homebrew/bin/node`. Zawsze rozstrzyga wynik `which node`.
+**2. Ścieżki.** Na Macach z procesorem Intel node ląduje w `/usr/local/bin/node`.
+`npm run autostart` wykrywa to sam, więc nie ma czego podmieniać ręcznie.
 
-**3. Przeglądarka.** Nowe wydania Playwrighta nie mają już buildów Chromium dla
-macOS 12 — `npx playwright install chromium` może odmówić. Wtedy, po kolei:
-
-```bash
-# a) starsza wersja Playwrighta, która jeszcze wspiera macOS 12
-npm install --save-exact playwright@1.47.2
-npx playwright install chromium
-```
-
-Jeśli i to odmówi — użyj Chrome'a, którego masz zainstalowanego. Dopisz
-w `agent/.env` jedną linię:
+**3. Przeglądarka.** Nowe wydania Playwrighta nie mają buildów Chromium dla
+macOS 12 — dlatego projekt przypina wersję 1.47.2, która je ma. Gdyby mimo to
+`npx playwright install chromium` odmówił, dopisz w `agent/.env`:
 
 ```
 PLAYWRIGHT_CHROMIUM_PATH=/Applications/Google Chrome.app/Contents/MacOS/Google Chrome

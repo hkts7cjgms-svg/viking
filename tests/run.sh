@@ -45,6 +45,10 @@ echo "== odczyt jadlospisu z panelu =="
 node tests/panel-scrape.test.mjs
 
 echo
+echo "== szczegoly posilku i etykieta miesiaca =="
+node tests/panel-details.test.mjs
+
+echo
 echo "== synchronizacja z kalendarzem =="
 node tests/calendar-sync.test.mjs
 

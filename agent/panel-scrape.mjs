@@ -130,11 +130,17 @@ export function extractDay() {
 }
 
 /**
- * Szczegoly posilku z bocznego panelu, ktory otwiera sie po kliknieciu w danie.
+ * Szczegoly posilku z okna otwieranego klinieciem w danie.
  *
- * Struktura tego panelu nie jest jeszcze rozpoznana, wiec bierzemy jego tekst
- * i probujemy rozbic go na pary "naglowek: tresc". Gdy sie nie uda, caly tekst
- * laduje pod kluczem "Szczegóły" - lepiej miec surowo niz nie miec wcale.
+ * Struktura okna (stan 09.2026):
+ *   .details-ingredients            <- najpewniejszy punkt zaczepienia
+ *     div  "Składniki"
+ *     p    <span>skladnik, </span><span class="font-medium">ALERGEN, </span>…
+ *   ul > li > span + span           <- Białko / 46.7g, Tłuszcz / 20.2g, …
+ *   p "479 kcal / 2005 kJ"
+ *
+ * Alergeny sa w spanach font-medium - tak oznacza je ten panel, zgodnie
+ * z etykietowaniem zywnosci (skladniki alergenne pisane wielkimi literami).
  *
  * @returns {object} Mapa etykieta => tresc.
  */
@@ -143,45 +149,87 @@ export function extractSidebarDetails() {
 		return String( value == null ? '' : value ).replace( /\s+/g, ' ' ).trim();
 	}
 
-	var sidebar = document.querySelector( '#sideBar' );
+	var anchor = document.querySelector( '.details-ingredients' );
+	var box = anchor ? anchor.closest( 'div.bg-white, [class*="overflow-y-auto"]' ) : null;
 
-	if ( ! sidebar ) {
-		return {};
+	if ( ! box ) {
+		box = document.querySelector( '#sideBar' );
 	}
 
-	var text = clean( sidebar.textContent );
-
-	if ( ! text ) {
+	if ( ! box ) {
 		return {};
 	}
 
 	var details = {};
-	var headings = sidebar.querySelectorAll( 'h1, h2, h3, h4, h5, h6, .h300, .h200, strong, dt, .item-title' );
-	var used = false;
 
-	for ( var i = 0; i < headings.length; i++ ) {
-		var label = clean( headings[ i ].textContent ).replace( /:$/, '' );
+	// Sposob podania, np. "Na zimno".
+	var serving = box.querySelector( '[class*="_cold_"], [class*="_hot_"]' );
 
-		if ( ! label || label.length > 60 ) {
-			continue;
-		}
+	if ( serving && clean( serving.textContent ) ) {
+		details[ 'Podanie' ] = clean( serving.textContent );
+	}
 
-		// Tresc to zwykle nastepny element albo reszta rodzica.
-		var valueNode = headings[ i ].nextElementSibling;
-		var value = valueNode ? clean( valueNode.textContent ) : '';
+	// Energia - jedyny akapit z "kcal".
+	var paragraphs = box.querySelectorAll( 'p' );
 
-		if ( ! value && headings[ i ].parentElement ) {
-			value = clean( headings[ i ].parentElement.textContent ).replace( label, '' ).trim();
-		}
+	for ( var i = 0; i < paragraphs.length; i++ ) {
+		var text = clean( paragraphs[ i ].textContent );
 
-		if ( value && value !== label ) {
-			details[ label ] = value;
-			used = true;
+		if ( /\d\s*kcal/i.test( text ) && text.length < 40 ) {
+			details[ 'Energia' ] = text;
+			break;
 		}
 	}
 
-	if ( ! used ) {
-		details[ 'Szczegóły' ] = text;
+	// Tabela wartosci odzywczych: dwa spany w wierszu.
+	var rows = box.querySelectorAll( 'li' );
+
+	for ( var r = 0; r < rows.length; r++ ) {
+		var spans = rows[ r ].querySelectorAll( 'span' );
+
+		if ( 2 !== spans.length ) {
+			continue;
+		}
+
+		var label = clean( spans[ 0 ].textContent ).replace( /:$/, '' );
+		var value = clean( spans[ 1 ].textContent );
+
+		if ( label && value && label.length < 30 ) {
+			details[ label ] = value;
+		}
+	}
+
+	if ( anchor ) {
+		var list = anchor.querySelector( 'p' );
+
+		if ( list ) {
+			details[ 'Składniki' ] = clean( list.textContent ).replace( /,\s*$/, '' );
+
+			// Alergeny wyroznione grubsza czcionka.
+			var bold = list.querySelectorAll( '.font-medium' );
+			var allergens = [];
+
+			for ( var b = 0; b < bold.length; b++ ) {
+				var item = clean( bold[ b ].textContent ).replace( /,\s*$/, '' );
+
+				if ( item && -1 === allergens.indexOf( item ) ) {
+					allergens.push( item );
+				}
+			}
+
+			if ( allergens.length ) {
+				details[ 'Alergeny' ] = allergens.join( ', ' );
+			}
+		}
+	}
+
+	// Gdy nic nie rozpoznano, oddajemy surowy tekst - lepsze niz nic.
+	if ( 0 === Object.keys( details ).length ) {
+		var raw = clean( box.textContent );
+
+		if ( raw ) {
+			details[ 'Szczegóły' ] = raw;
+		}
 	}
 
 	return details;
@@ -221,4 +269,11 @@ export function extractDayHeading() {
 	}
 
 	return { day: Number( match[ 1 ] ), month: month + 1 };
+}
+
+/** Podpis aktualnie pokazywanego miesiaca, np. "Wrzesień 2026". */
+export function extractMonthLabel() {
+	var node = document.querySelector( '#calendar-current-month' );
+
+	return node ? node.textContent.replace( /\s+/g, ' ' ).trim() : '';
 }

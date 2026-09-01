@@ -155,8 +155,9 @@ async function main() {
 				from,
 				to,
 				log,
-				// Wchodzenie w kazdy posilek wydluza przebieg, wiec domyslnie wylaczone.
-				details: Boolean( flags.details ) || '1' === process.env.KV_FETCH_DETAILS,
+				// Skladniki i alergeny zbieramy domyslnie - to najcenniejsza czesc
+				// jadlospisu. --no-details wylacza, gdy zalezy na szybkosci.
+				details: ! flags[ 'no-details' ] && '0' !== process.env.KV_FETCH_DETAILS,
 				// Ile czekac, az panel doczyta posilki po przelaczeniu dnia.
 				mealsTimeout: Number( process.env.KV_MEALS_TIMEOUT || 15000 ),
 			} )
