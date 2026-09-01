@@ -96,6 +96,22 @@ Jak wygląda dobrze — naprawdę:
 npm run sync
 ```
 
+## Jak działa logowanie
+
+Nie musisz nic klikać — skrypt robi to, co Ty zrobiłbyś ręcznie:
+
+1. Otwiera przeglądarkę (niewidoczną) i wchodzi na panel.
+2. **Najpierw próbuje użyć zapamiętanej sesji** z poprzedniego uruchomienia
+   (plik `agent/.session.json` — jest w `.gitignore`). Jeśli sesja nadal żyje,
+   logowanie w ogóle się nie odbywa; w logu zobaczysz „logowanie pominięte".
+3. Dopiero gdy sesja wygasła, wypełnia formularz: e-mail, hasło, „Zaloguj" —
+   i zapisuje nową sesję na następny raz.
+4. Gdy hasło jest złe, zatrzymuje się z komunikatem, co poprawić — zamiast
+   próbować w kółko i zablokować konto.
+
+Efekt: przy codziennym uruchomieniu formularz logowania wypełnia się rzadko,
+tylko po wygaśnięciu sesji po stronie panelu.
+
 ## Krok 6 — codziennie samo
 
 macOS ma do tego `launchd`. Utwórz plik:

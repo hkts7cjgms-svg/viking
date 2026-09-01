@@ -117,7 +117,8 @@ npm install      # jednorazowo, dla jsdom
 bash tests/run.sh
 ```
 
-278 asercji: logika dopasowania dat i kanał iCal w czystym PHP, CLI i serwer MCP na
+294 asercje: logika dopasowania dat i kanał iCal w czystym PHP, CLI i serwer MCP na
 atrapie API, odczyt jadłospisu i wstrzykiwacz na fragmencie prawdziwego HTML-a panelu,
-planowanie synchronizacji kalendarza oraz archiwum CSV — bez stawiania WordPressa,
-bez sieci, bez konta Google i bez macOS.
+planowanie synchronizacji kalendarza, archiwum CSV oraz pełne logowanie z ponownym
+użyciem sesji — w prawdziwym Chromium na atrapie panelu. Bez stawiania WordPressa,
+bez sieci zewnętrznej, bez konta Google i bez macOS.

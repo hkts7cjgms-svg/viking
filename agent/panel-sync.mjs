@@ -8,9 +8,15 @@
  *   KV_PANEL_USER      adres e-mail konta
  *   KV_PANEL_PASSWORD  hasło
  *
- * Gdy poznamy adresy API panelu (zakładka Sieć w narzędziach deweloperskich),
- * ten plik da się zastąpić zwykłymi zapytaniami HTTP - reszta łańcucha zostaje.
+ * Sesja jest zapisywana na dysk i uzywana ponownie, wiec przy codziennym
+ * uruchomieniu formularz logowania wypelnia sie tylko wtedy, gdy sesja wygasla.
+ *
+ * Gdy poznamy adresy API panelu, ten plik da sie zastapic zwyklymi zapytaniami
+ * HTTP - reszta lancucha zostaje bez zmian.
  */
+
+import { existsSync, mkdirSync } from 'node:fs';
+import { dirname } from 'node:path';
 
 import { extractDates, extractDay, extractSidebarDetails } from './panel-scrape.mjs';
 
@@ -18,19 +24,30 @@ const SELECTORS = {
 	user: '#username',
 	password: '#password',
 	submit: 'button[type="submit"]',
-	dayCard: '#dayDetailsCard',
-	dayHeading: '#day-details-date',
+	mealContent: '.meal-content',
 	mealCard: 'ul.dashboard-meals-list > li.enhanced-meal-card',
 	calendar: '.calendar-slider-items',
 	sidebar: '#sideBar',
+	loginForm: '#username',
 };
 
+/** Banery zgod potrafia zaslonic przycisk logowania. */
+const COOKIE_BUTTONS = [
+	'#CybotCookiebotDialogBodyLevelButtonLevelOptinAllowAll',
+	'#CybotCookiebotDialogBodyButtonAccept',
+	'#CybotCookiebotDialogBodyLevelButtonAccept',
+];
+
+export class PanelLoginError extends Error {}
+
 /**
- * @param {object} options { panelUrl, user, password, headless, timeout, log }
+ * @param {object} options { panelUrl, user, password, headless, timeout, sessionPath, log }
  */
 export async function withPanel( options, callback ) {
 	const { chromium } = await import( 'playwright' );
 	const log = options.log || ( () => {} );
+	const timeout = options.timeout || 30000;
+	const panelUrl = options.panelUrl.replace( /\/+$/, '' );
 
 	const browser = await chromium.launch( {
 		headless: false !== options.headless,
@@ -38,22 +55,31 @@ export async function withPanel( options, callback ) {
 	} );
 
 	try {
-		const context = await browser.newContext( { locale: 'pl-PL' } );
+		const contextOptions = { locale: 'pl-PL' };
+
+		// Ciasteczka z poprzedniego uruchomienia - jesli sesja zyje, logowanie odpada.
+		if ( options.sessionPath && existsSync( options.sessionPath ) ) {
+			contextOptions.storageState = options.sessionPath;
+		}
+
+		const context = await browser.newContext( contextOptions );
 		const page = await context.newPage();
 
-		page.setDefaultTimeout( options.timeout || 30000 );
+		page.setDefaultTimeout( timeout );
 
-		log( 'Logowanie do panelu…' );
+		await page.goto( `${ panelUrl }/`, { waitUntil: 'domcontentloaded' } );
+		await dismissCookieBanner( page );
 
-		await page.goto( `${ options.panelUrl.replace( /\/+$/, '' ) }/logowanie`, { waitUntil: 'domcontentloaded' } );
-		await page.fill( SELECTORS.user, options.user );
-		await page.fill( SELECTORS.password, options.password );
-		await page.click( SELECTORS.submit );
+		if ( await isLoggedIn( page, timeout ) ) {
+			log( 'Sesja z poprzedniego uruchomienia nadal ważna — logowanie pominięte.' );
+		} else {
+			await login( page, { panelUrl, user: options.user, password: options.password, timeout, log } );
+		}
 
-		// Po zalogowaniu panel pokazuje kalendarz zamowienia.
-		await page.waitForSelector( SELECTORS.calendar, { timeout: options.timeout || 30000 } );
-
-		log( 'Zalogowano.' );
+		if ( options.sessionPath ) {
+			mkdirSync( dirname( options.sessionPath ), { recursive: true } );
+			await context.storageState( { path: options.sessionPath } );
+		}
 
 		return await callback( page, log );
 	} finally {
@@ -62,10 +88,109 @@ export async function withPanel( options, callback ) {
 }
 
 /**
+ * Czy widzimy juz pulpit z kalendarzem, czy jeszcze formularz logowania.
+ */
+async function isLoggedIn( page, timeout ) {
+	try {
+		await page.waitForSelector( `${ SELECTORS.calendar }, ${ SELECTORS.loginForm }`, {
+			timeout: Math.min( timeout, 15000 ),
+		} );
+	} catch {
+		return false;
+	}
+
+	return 0 < ( await page.locator( SELECTORS.calendar ).count() );
+}
+
+async function dismissCookieBanner( page ) {
+	for ( const selector of COOKIE_BUTTONS ) {
+		const button = page.locator( selector );
+
+		try {
+			if ( await button.isVisible( { timeout: 1000 } ) ) {
+				await button.click( { timeout: 2000 } );
+
+				return;
+			}
+		} catch {
+			// Baneru nie ma albo znikl sam - to nie jest blad.
+		}
+	}
+}
+
+async function login( page, { panelUrl, user, password, timeout, log } ) {
+	if ( ! user || ! password ) {
+		throw new PanelLoginError( 'Brak KV_PANEL_USER lub KV_PANEL_PASSWORD w agent/.env.' );
+	}
+
+	log( 'Sesja wygasła — loguję się do panelu…' );
+
+	await page.goto( `${ panelUrl }/logowanie`, { waitUntil: 'domcontentloaded' } );
+	await dismissCookieBanner( page );
+	await page.waitForSelector( SELECTORS.user, { timeout } );
+
+	await page.fill( SELECTORS.user, user );
+	await page.fill( SELECTORS.password, password );
+
+	// Przycisk jest wylaczony, dopoki formularz nie uzna danych za kompletne.
+	const submit = page.locator( SELECTORS.submit ).first();
+
+	try {
+		await submit.waitFor( { state: 'visible', timeout } );
+		await page.waitForFunction(
+			( selector ) => {
+				var button = document.querySelector( selector );
+
+				return Boolean( button ) && ! button.disabled;
+			},
+			SELECTORS.submit,
+			{ timeout: 10000 }
+		);
+	} catch {
+		throw new PanelLoginError(
+			'Przycisk logowania pozostał nieaktywny — panel nie przyjął danych z formularza. ' +
+				'Uruchom z KV_HEADLESS=0, żeby zobaczyć, co się dzieje.'
+		);
+	}
+
+	await submit.click();
+
+	try {
+		await page.waitForSelector( SELECTORS.calendar, { timeout } );
+	} catch {
+		throw new PanelLoginError( await loginFailureReason( page ) );
+	}
+
+	log( 'Zalogowano.' );
+}
+
+/**
+ * Po nieudanym logowaniu staramy sie powiedziec, co poszlo nie tak, zamiast
+ * zrzucac surowy blad oczekiwania na element.
+ */
+async function loginFailureReason( page ) {
+	const message = await page
+		.locator( '.Toastify__toast, [role="alert"], .error, .form-error' )
+		.first()
+		.textContent( { timeout: 2000 } )
+		.catch( () => null );
+
+	if ( message && message.trim() ) {
+		return `Panel odrzucił logowanie: ${ message.trim() }`;
+	}
+
+	if ( 0 < ( await page.locator( SELECTORS.loginForm ).count() ) ) {
+		return 'Logowanie nie powiodło się — sprawdź KV_PANEL_USER i KV_PANEL_PASSWORD w agent/.env.';
+	}
+
+	return 'Zalogowano, ale panel nie pokazał kalendarza. Możliwe, że nie ma aktywnego zamówienia.';
+}
+
+/**
  * Przechodzi po dniach kalendarza i zbiera jadlospis.
  *
- * @param {object} page  Strona Playwrighta.
- * @param {object} opts  { from, to, log }
+ * @param {object} page Strona Playwrighta.
+ * @param {object} opts { from, to, details, log }
  */
 export async function collectDays( page, opts = {} ) {
 	const log = opts.log || ( () => {} );
@@ -84,10 +209,8 @@ export async function collectDays( page, opts = {} ) {
 	const days = [];
 
 	for ( const date of wanted ) {
-		const opened = await openDay( page, date );
-
-		if ( ! opened ) {
-			log( `  ${ date }: nie udało się otworzyć, pomijam.` );
+		if ( ! ( await openDay( page, date ) ) ) {
+			log( `  ${ date }: dzień niedostępny, pomijam.` );
 			continue;
 		}
 
@@ -116,7 +239,6 @@ export async function collectDays( page, opts = {} ) {
 
 /**
  * Klika w dzien i czeka, az karta dnia faktycznie go pokaze.
- * Zwraca false, gdy dzien jest nieklikalny albo panel nie zdazyl sie przelaczyc.
  */
 async function openDay( page, date ) {
 	const tile = page.locator( `[data-date="${ date }"] li.day` ).first();
@@ -164,7 +286,7 @@ async function openDay( page, date ) {
  */
 async function addMealDetails( page, day, log ) {
 	for ( let index = 0; index < day.meals.length; index++ ) {
-		const content = page.locator( `${ SELECTORS.mealCard } ${ '.meal-content' }` ).nth( index );
+		const content = page.locator( `${ SELECTORS.mealCard } ${ SELECTORS.mealContent }` ).nth( index );
 
 		if ( 0 === ( await content.count() ) ) {
 			continue;
@@ -173,7 +295,6 @@ async function addMealDetails( page, day, log ) {
 		try {
 			await content.click();
 
-			// Panel wsuwa sie z boku - czekamy, az faktycznie cos w nim bedzie.
 			await page.waitForFunction(
 				( selector ) => {
 					var node = document.querySelector( selector );
@@ -188,7 +309,6 @@ async function addMealDetails( page, day, log ) {
 		} catch {
 			log( `    ${ day.date } / ${ day.meals[ index ].slug }: nie udało się odczytać szczegółów.` );
 		} finally {
-			// Escape zamyka panel bez dotykania czegokolwiek w środku.
 			await page.keyboard.press( 'Escape' );
 			await page.waitForTimeout( 250 );
 		}

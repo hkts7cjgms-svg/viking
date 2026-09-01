@@ -141,6 +141,8 @@ async function main() {
 			user: process.env.KV_PANEL_USER,
 			password: process.env.KV_PANEL_PASSWORD,
 			headless: '0' !== process.env.KV_HEADLESS,
+			// Zapamietana sesja - codzienne uruchomienie zwykle w ogole sie nie loguje.
+			sessionPath: join( HERE, '.session.json' ),
 			log,
 		},
 		( page ) =>

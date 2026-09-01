@@ -4,6 +4,11 @@ set -euo pipefail
 
 cd "$( dirname "${BASH_SOURCE[0]}" )/.."
 
+# Srodowiska z gotowym Chromium (np. Claude Code w chmurze) trzymaja go tutaj.
+if [ -z "${PLAYWRIGHT_CHROMIUM_PATH:-}" ] && [ -x /opt/pw-browsers/chromium ]; then
+	export PLAYWRIGHT_CHROMIUM_PATH=/opt/pw-browsers/chromium
+fi
+
 echo "== lint PHP =="
 find plugin -name '*.php' -print0 | xargs -0 -n1 php -l > /dev/null
 echo "OK - wszystkie pliki PHP bez bledow skladni"
@@ -50,3 +55,7 @@ node tests/apple-calendar.test.mjs
 echo
 echo "== archiwum jadlospisu =="
 node tests/archive.test.mjs
+
+echo
+echo "== logowanie do panelu (prawdziwa przegladarka, atrapa panelu) =="
+node tests/panel-login.test.mjs

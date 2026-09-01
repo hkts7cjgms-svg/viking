@@ -6,3 +6,6 @@ node_modules/
 vendor/
 *.log
 .DS_Store
+
+# Zapamietana sesja panelu - dane logowania, nigdy do repozytorium.
+agent/.session.json
