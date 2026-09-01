@@ -4,9 +4,14 @@
   "private": true,
   "description": "Wydarzenia w opisach posiłków — wtyczka WordPressa, REST API i narzędzia agenta.",
   "scripts": {
-    "test": "bash tests/run.sh"
+    "test": "bash tests/run.sh",
+    "sync": "node agent/sync-to-calendar.mjs",
+    "sync:dry": "node agent/sync-to-calendar.mjs --dry-run"
   },
   "devDependencies": {
     "jsdom": "^30.0.1"
+  },
+  "dependencies": {
+    "playwright": "^1.50.0"
   }
 }

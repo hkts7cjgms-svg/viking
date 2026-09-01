@@ -13,9 +13,10 @@ pojawia się przy obiedzie tego dnia, sam znika dzień później.
 | `plugin/kuchnia-vikinga-wydarzenia/` | Wtyczka WordPressa: panel CRUD, doklejanie do jadłospisu, REST API |
 | `agent/kv-events.mjs` | CLI do zarządzania wydarzeniami z terminala lub crona |
 | `agent/mcp-server.mjs` | Serwer MCP — asystent zarządza wydarzeniami sam, bez panelu |
+| `agent/sync-to-calendar.mjs` | Automat: logowanie do panelu → jadłospis → Kalendarz Google |
 | `tests/` | Testy: logika dat w PHP, CLI i MCP na atrapie API |
 | `plugin/…/assets/panel-events.js` | Wstrzykiwacz wydarzeń do panelu klienta (przez GTM) |
-| `docs/` | [Instalacja](docs/INSTALACJA.md), [API](docs/API.md), [panel klienta](docs/PANEL-KLIENTA.md), [kalendarz](docs/KALENDARZ.md) |
+| `docs/` | [Instalacja](docs/INSTALACJA.md), [API](docs/API.md), [panel klienta](docs/PANEL-KLIENTA.md), [kalendarz](docs/KALENDARZ.md), [automat](docs/AUTOMAT.md) |
 
 ## Jak to działa
 
@@ -83,6 +84,17 @@ W panelu klienta skrypt dokłada dodatkowo przycisk **„Zapisz w Kalendarzu Goo
 jedno kliknięcie zapisuje jadłospis wybranego dnia jako wpis całodniowy, bez OAuth
 i bez dostępu do konta.
 
+A jeśli ma się dziać **całkiem samo**, bez klikania:
+
+```bash
+npm run sync:dry     # próba na sucho
+npm run sync         # logowanie do panelu → jadłospis → Kalendarz Google
+```
+
+Uruchamiane z crona utrzymuje kalendarz w zgodzie z panelem: dodaje nowe dni,
+poprawia zmienione, usuwa te, których już nie ma — i nie tyka cudzych wpisów.
+Konfiguracja: [docs/AUTOMAT.md](docs/AUTOMAT.md).
+
 ## Dwa miejsca, dwie drogi
 
 Jadłospis żyje w dwóch niezależnych systemach i każdy wymaga czego innego:
@@ -102,6 +114,7 @@ npm install      # jednorazowo, dla jsdom
 bash tests/run.sh
 ```
 
-162 asercje: logika dopasowania dat i budowanie kanału iCal w czystym PHP, CLI i serwer
-MCP na atrapie API oraz wstrzykiwacz i zapis dnia do kalendarza na fragmencie
-prawdziwego HTML-a panelu — bez stawiania WordPressa.
+219 asercji: logika dopasowania dat i budowanie kanału iCal w czystym PHP, CLI i serwer
+MCP na atrapie API, odczyt jadłospisu i wstrzykiwacz na fragmencie prawdziwego HTML-a
+panelu, oraz planowanie synchronizacji z Kalendarzem Google — bez stawiania
+WordPressa, bez sieci i bez konta Google.

@@ -3,6 +3,8 @@
  * z panel.kuchniavikinga.pl. Uruchomienie: node tests/panel-events.test.mjs
  */
 import { createRequire } from 'node:module';
+
+import { panelHtml } from './panel-fixture.mjs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -34,41 +36,6 @@ function same( expected, actual, label ) {
 	}
 
 	failures.push( `${ label }\n    oczekiwano: ${ JSON.stringify( expected ) }\n    otrzymano:  ${ JSON.stringify( actual ) }` );
-}
-
-/** Fragment odwzorowujacy strukture panelu: kalendarz + karta dnia z posilkami. */
-function panelHtml( { selectedDate = '2026-09-02' } = {} ) {
-	const day = ( date ) => `
-		<div data-date="${ date }">
-			<div class="relative inline-block group">
-				<li class="day has-tooltip${ date === selectedDate ? ' is-selected is-active' : '' }">
-					<div data-date="${ date }" id="calendar-day-${ date }" role="button" tabindex="0">
-						<div class="day-header"><div class="h300 day-number">${ Number( date.slice( 8 ) ) }</div></div>
-					</div>
-				</li>
-			</div>
-		</div>`;
-
-	const meal = ( id, name, content ) => `
-		<li class="enhanced-meal-card" id="mealCard-${ id }">
-			<div class="meal-header" role="button" tabindex="0"><div class="name">${ name } </div></div>
-			<div class="meal-content" role="button" tabindex="0"><span class="">${ content }</span></div>
-			<div class="meal-nutritions"><div class="nutrition-summary"><div class="nutrition-summary__item">479kcal</div></div></div>
-		</li>`;
-
-	return `<!doctype html><html><body>
-		<div class="calendar-slider-items">${ day( '2026-09-01' ) }${ day( '2026-09-02' ) }${ day( '2026-09-15' ) }</div>
-		<div class="card day-details-card" id="dayDetailsCard">
-			<div class="card-header"><h3 id="day-details-date">Środa, 2 września</h3></div>
-			<div class="card-body">
-				<ul class="dashboard-meals-list">
-					${ meal( 4204325, 'Śniadanie', 'Kanapka z chlebem wiejskim, pieczonym schabem i serem' ) }
-					${ meal( 4204326, 'Obiad', 'Pierogi z ziemniakami i twarogiem, okrasa z boczkiem' ) }
-					${ meal( 4204327, 'Kolacja', 'Tacos z szarpaną wieprzowiną z chili' ) }
-				</ul>
-			</div>
-		</div>
-	</body></html>`;
 }
 
 // --- normalizacja slugow (musi zgadzac sie z PHP) ------------------------
@@ -215,7 +182,7 @@ ok( ! panelEvents.isValidDate( '15-09-2026' ), 'zły format daty odpada' );
 		day.meals[ 1 ].description.startsWith( 'Pierogi z ziemniakami' ),
 		'opis posiłku trafia do zebranych danych'
 	);
-	same( '479kcal', day.meals[ 0 ].nutrition.join( ' · ' ), 'wartości odżywcze są zbierane' );
+	same( '479kcal · B: 46.7g', day.meals[ 0 ].nutrition.join( ' · ' ), 'wartości odżywcze są zbierane' );
 
 	const details = panelEvents.formatDayDetails( day );
 	ok( details.includes( 'ŚNIADANIE' ), 'opis wpisu zawiera nagłówek posiłku' );

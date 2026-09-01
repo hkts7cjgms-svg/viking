@@ -34,3 +34,11 @@ node tests/mcp.test.mjs
 echo
 echo "== wstrzykiwacz do panelu klienta =="
 node tests/panel-events.test.mjs
+
+echo
+echo "== odczyt jadlospisu z panelu =="
+node tests/panel-scrape.test.mjs
+
+echo
+echo "== synchronizacja z Kalendarzem Google =="
+node tests/calendar-sync.test.mjs
