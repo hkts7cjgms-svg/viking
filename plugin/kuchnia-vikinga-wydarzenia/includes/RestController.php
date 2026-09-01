@@ -23,6 +23,7 @@ final class RestController {
 	public function register(): void {
 		add_action( 'rest_api_init', array( $this, 'register_routes' ) );
 		add_filter( 'rest_post_dispatch', array( $this, 'send_cors_headers' ), 10, 3 );
+		add_filter( 'rest_pre_serve_request', array( $this, 'serve_calendar' ), 10, 3 );
 	}
 
 	/**
@@ -169,6 +170,21 @@ final class RestController {
 						'type'     => 'string',
 						'required' => true,
 					),
+					'meal' => array( 'type' => 'string' ),
+					'diet' => array( 'type' => 'string' ),
+				),
+			)
+		);
+
+		// Kanal iCal do subskrypcji w Kalendarzu Google, Outlooku czy telefonie.
+		register_rest_route(
+			self::REST_NAMESPACE,
+			'/calendar.ics',
+			array(
+				'methods'             => 'GET',
+				'callback'            => array( $this, 'get_calendar' ),
+				'permission_callback' => '__return_true',
+				'args'                => array(
 					'meal' => array( 'type' => 'string' ),
 					'diet' => array( 'type' => 'string' ),
 				),
@@ -606,6 +622,79 @@ final class RestController {
 		);
 	}
 
+	/**
+	 * Kanal iCal. Trafia tu tylko lista wydarzen - zamiane na tekst robi
+	 * serve_calendar(), bo REST domyslnie oddaje JSON.
+	 */
+	public function get_calendar( \WP_REST_Request $request ): \WP_REST_Response {
+		$meal = $this->slug_param( $request, 'meal' );
+		$diet = $this->slug_param( $request, 'diet' );
+
+		$events = array_filter(
+			Repository::all(),
+			static function ( array $event ) use ( $meal, $diet ): bool {
+				$meals = $event['meals'] ?? array();
+
+				if ( null !== $meal && array() !== $meals && ! in_array( $meal, $meals, true ) ) {
+					return false;
+				}
+
+				$diets = $event['diets'] ?? array();
+
+				return null === $diet || array() === $diets || in_array( $diet, $diets, true );
+			}
+		);
+
+		$ics = IcsBuilder::build(
+			array_values( $events ),
+			array(
+				'name'    => sprintf(
+					/* translators: %s: nazwa strony. */
+					__( 'Wydarzenia — %s', 'kv-wydarzenia' ),
+					get_bloginfo( 'name' )
+				),
+				'host'    => (string) wp_parse_url( home_url(), PHP_URL_HOST ),
+				'dtstamp' => gmdate( 'Ymd\THis\Z' ),
+			)
+		);
+
+		return new \WP_REST_Response( array( 'ics' => $ics ) );
+	}
+
+	/**
+	 * Oddaje kanal iCal jako text/calendar zamiast JSON-a.
+	 *
+	 * @param bool              $served  Czy odpowiedz zostala juz wyslana.
+	 * @param \WP_HTTP_Response $result  Wynik.
+	 * @param \WP_REST_Request  $request Zadanie.
+	 */
+	public function serve_calendar( $served, $result, $request ): bool {
+		if ( $served || ! $request instanceof \WP_REST_Request ) {
+			return (bool) $served;
+		}
+
+		if ( ltrim( (string) $request->get_route(), '/' ) !== self::REST_NAMESPACE . '/calendar.ics' ) {
+			return (bool) $served;
+		}
+
+		$data = $result instanceof \WP_HTTP_Response ? $result->get_data() : null;
+
+		if ( ! is_array( $data ) || ! isset( $data['ics'] ) ) {
+			return (bool) $served;
+		}
+
+		if ( ! headers_sent() ) {
+			header( 'Content-Type: text/calendar; charset=utf-8' );
+			header( 'Content-Disposition: inline; filename="wydarzenia.ics"' );
+			// Kalendarze odpytuja kanal co kilka godzin - nie ma po co mielic tego za kazdym razem.
+			header( 'Cache-Control: public, max-age=900' );
+		}
+
+		echo $data['ics']; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- tekst iCal, nie HTML; escapowanie robi IcsBuilder.
+
+		return true;
+	}
+
 	public function get_meta( \WP_REST_Request $request ): \WP_REST_Response {
 		unset( $request );
 
@@ -613,6 +702,7 @@ final class RestController {
 			array(
 				'version'   => VERSION,
 				'today'     => Shortcode::today(),
+				'calendar'  => rest_url( self::REST_NAMESPACE . '/calendar.ics' ),
 				'meals'     => array_map(
 					static fn( string $slug ): array => array(
 						'slug'  => $slug,

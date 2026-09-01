@@ -20,6 +20,10 @@ echo "== logika dopasowania (PHP) =="
 php tests/EventMatcherTest.php
 
 echo
+echo "== kanal iCal (PHP) =="
+php tests/IcsBuilderTest.php
+
+echo
 echo "== CLI na atrapie API =="
 node tests/cli.test.mjs
 

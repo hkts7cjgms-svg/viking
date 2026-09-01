@@ -108,6 +108,11 @@ zwraca też puste.
 curl 'https://kuchniavikinga.pl/wp-json/kv/v1/range?from=2026-09-01&to=2026-09-30&diet=smart'
 ```
 
+### `GET /calendar.ics`
+
+Kanał iCal do subskrypcji w kalendarzu. Odpowiada `text/calendar`, nie JSON-em.
+Przyjmuje `meal` i `diet`. Opis w [KALENDARZ.md](KALENDARZ.md).
+
 ### `GET /render`
 
 Wersja dla frontu: zwraca `before` i `after` jako gotowe fragmenty HTML.

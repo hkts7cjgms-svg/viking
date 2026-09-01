@@ -119,6 +119,28 @@ async function api( method, path, { query = {}, body = null, auth = false } = {}
 	return payload;
 }
 
+/** Pobiera kanal iCal jako surowy tekst - to jedyny endpoint, ktory nie zwraca JSON-a. */
+async function fetchCalendar( query = {} ) {
+	requireConfig( false );
+
+	const url = new URL( `${ CONFIG.siteUrl }/wp-json/kv/v1/calendar.ics` );
+
+	for ( const [ key, value ] of Object.entries( query ) ) {
+		if ( value !== undefined && value !== null && value !== '' ) {
+			url.searchParams.set( key, String( value ) );
+		}
+	}
+
+	const response = await fetch( url, { headers: { Accept: 'text/calendar' } } );
+	const text = await response.text();
+
+	if ( ! response.ok ) {
+		throw new ApiError( response.status, 'kv_http_error', `HTTP ${ response.status }` );
+	}
+
+	return text;
+}
+
 /** Parsuje --klucz wartosc oraz --flaga na obiekt. */
 function parseArgs( argv ) {
 	const positional = [];
@@ -204,6 +226,8 @@ const USAGE = `kv-events — zarządzanie wydarzeniami Kuchni Vikinga
   add --title "…" [--body|--from|--to|--meals|--diets|--weekdays|--badge|--priority|--placement|--status]
   edit <id> [te same flagi co add]
   rm <id> [--force]
+
+  calendar [--meal] [--diet] [--out plik.ics]   kanał iCal do subskrypcji
 
   --json  wypisz surową odpowiedź API
 `;
@@ -292,6 +316,21 @@ async function main() {
 				process.stdout.write( `\n${ day.date } (${ day.count })\n` );
 				printTable( day.events );
 			}
+			break;
+		}
+
+		case 'calendar': {
+			const ics = await fetchCalendar( { meal: flags.meal, diet: flags.diet } );
+
+			if ( typeof flags.out === 'string' ) {
+				const { writeFileSync } = await import( 'node:fs' );
+
+				writeFileSync( flags.out, ics, 'utf8' );
+				process.stdout.write( `Zapisano ${ flags.out } (${ ics.split( 'BEGIN:VEVENT' ).length - 1 } wydarzeń)\n` );
+				break;
+			}
+
+			process.stdout.write( ics );
 			break;
 		}
 

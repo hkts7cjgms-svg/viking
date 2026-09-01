@@ -157,6 +157,15 @@ $kv_option = Settings::OPTION;
 		<?php submit_button(); ?>
 	</form>
 
+	<h2><?php esc_html_e( 'Kalendarz', 'kv-wydarzenia' ); ?></h2>
+	<p>
+		<?php esc_html_e( 'Zasubskrybuj ten adres w Kalendarzu Google, Outlooku albo w telefonie — wydarzenia będą się w nim pojawiać i znikać same:', 'kv-wydarzenia' ); ?>
+	</p>
+	<pre class="kv-settings__snippet"><code><?php echo esc_html( rest_url( RestController::REST_NAMESPACE . '/calendar.ics' ) ); ?></code></pre>
+	<p class="description">
+		<?php esc_html_e( 'Można zawęzić kanał do jednego posiłku lub diety, dopisując ?meal=obiad albo ?diet=smart. Wydarzenia bez dat nie trafiają do kalendarza.', 'kv-wydarzenia' ); ?>
+	</p>
+
 	<h2><?php esc_html_e( 'Dostęp dla agenta', 'kv-wydarzenia' ); ?></h2>
 	<p>
 		<?php esc_html_e( 'Wydarzeniami można zarządzać skryptem przez REST API, bez wchodzenia do panelu. Bazowy adres:', 'kv-wydarzenia' ); ?>

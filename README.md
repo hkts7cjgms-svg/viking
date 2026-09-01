@@ -15,7 +15,7 @@ pojawia się przy obiedzie tego dnia, sam znika dzień później.
 | `agent/mcp-server.mjs` | Serwer MCP — asystent zarządza wydarzeniami sam, bez panelu |
 | `tests/` | Testy: logika dat w PHP, CLI i MCP na atrapie API |
 | `plugin/…/assets/panel-events.js` | Wstrzykiwacz wydarzeń do panelu klienta (przez GTM) |
-| `docs/` | [Instalacja](docs/INSTALACJA.md), [API](docs/API.md), [panel klienta](docs/PANEL-KLIENTA.md) |
+| `docs/` | [Instalacja](docs/INSTALACJA.md), [API](docs/API.md), [panel klienta](docs/PANEL-KLIENTA.md), [kalendarz](docs/KALENDARZ.md) |
 
 ## Jak to działa
 
@@ -68,6 +68,17 @@ node agent/kv-events.mjs rm 123
 Ten sam zestaw operacji jako serwer MCP — po podpięciu asystent dodaje, zmienia
 i usuwa wydarzenia sam. Konfiguracja w [docs/INSTALACJA.md](docs/INSTALACJA.md#agent-mcp).
 
+## Kalendarz
+
+Wtyczka wystawia kanał iCal — subskrybujesz raz, a wydarzenia same pojawiają się
+i znikają w Kalendarzu Google, Outlooku czy w telefonie:
+
+```
+https://kuchniavikinga.pl/wp-json/kv/v1/calendar.ics
+```
+
+Szczegóły i sposób subskrypcji: [docs/KALENDARZ.md](docs/KALENDARZ.md).
+
 ## Dwa miejsca, dwie drogi
 
 Jadłospis żyje w dwóch niezależnych systemach i każdy wymaga czego innego:
@@ -87,5 +98,6 @@ npm install      # jednorazowo, dla jsdom
 bash tests/run.sh
 ```
 
-91 asercji: logika dopasowania dat w czystym PHP, CLI i serwer MCP na atrapie API oraz
-wstrzykiwacz do panelu na fragmencie prawdziwego HTML-a — bez stawiania WordPressa.
+140 asercji: logika dopasowania dat i budowanie kanału iCal w czystym PHP, CLI i serwer
+MCP na atrapie API oraz wstrzykiwacz do panelu na fragmencie prawdziwego HTML-a —
+bez stawiania WordPressa.

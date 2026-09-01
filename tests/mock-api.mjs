@@ -79,6 +79,26 @@ export function startMockApi() {
 				return json( res, 200, updated );
 			}
 
+			if ( path === '/calendar.ics' ) {
+				const dated = [ ...events.values() ].filter( ( event ) => event.date_from || event.date_to );
+				const body = [
+					'BEGIN:VCALENDAR',
+					'VERSION:2.0',
+					...dated.flatMap( ( event ) => [
+						'BEGIN:VEVENT',
+						`UID:kv-wydarzenie-${ event.id }@example.test`,
+						`SUMMARY:${ event.title }`,
+						'END:VEVENT',
+					] ),
+					'END:VCALENDAR',
+					'',
+				].join( '\r\n' );
+
+				res.writeHead( 200, { 'Content-Type': 'text/calendar; charset=utf-8' } );
+
+				return res.end( body );
+			}
+
 			if ( path === '/range' ) {
 				const from = url.searchParams.get( 'from' );
 				const to = url.searchParams.get( 'to' );

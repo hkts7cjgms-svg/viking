@@ -5,6 +5,8 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { tmpdir } from 'node:os';
+import { readFileSync, rmSync } from 'node:fs';
 import { startMockApi } from './mock-api.mjs';
 
 const run = promisify( execFile );
@@ -83,6 +85,16 @@ ok( noAuth.failed && noAuth.stderr.includes( 'KV_APP_PASSWORD' ), 'brak hasła a
 
 const noTitle = await cli( [ 'add', '--body', 'sam opis' ] );
 ok( noTitle.failed && noTitle.stderr.includes( '--title' ), 'add bez tytułu kończy się błędem' );
+
+const calendar = await cli( [ 'calendar' ] );
+ok( calendar.stdout.startsWith( 'BEGIN:VCALENDAR' ), 'calendar wypisuje kanał iCal' );
+ok( calendar.stdout.includes( 'Dzień Kuchni Polskiej' ), 'kanał zawiera dodane wydarzenie' );
+
+const icsPath = join( tmpdir(), `kv-test-${ process.pid }.ics` );
+const saved = await cli( [ 'calendar', '--out', icsPath ] );
+ok( saved.stdout.includes( '1 wydarzeń' ), 'calendar --out raportuje liczbę wydarzeń' );
+ok( readFileSync( icsPath, 'utf8' ).includes( 'BEGIN:VEVENT' ), 'calendar --out zapisuje plik' );
+rmSync( icsPath, { force: true } );
 
 const removed = await cli( [ 'rm', String( id ), '--force' ] );
 ok( ! removed.failed && removed.stdout.includes( 'Usunięto trwale' ), 'rm --force usuwa wydarzenie' );
