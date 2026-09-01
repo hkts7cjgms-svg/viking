@@ -154,6 +154,20 @@ Wyłączenie: `launchctl unload ~/Library/LaunchAgents/pl.kuchniavikinga.sync.pl
 > Uwaga: `launchd` uruchomi zadanie tylko gdy MacBook jest włączony. Jeśli o 7:30
 > był uśpiony, zadanie odpali się po wybudzeniu.
 
+## Ile dni się pobiera
+
+Tyle, ile catering opublikował. Menu bywa gotowe na kilkanaście dni do przodu,
+więc dalsze dni zamówienia — mimo że w panelu są klikalne — nie mają jeszcze
+jadłospisu i zostają pominięte z komunikatem `jadłospis jeszcze nieopublikowany`.
+
+To nie jest błąd i nie trzeba nic robić. Codzienne uruchomienie samo dobierze
+każdy dzień w chwili, gdy menu się pojawi. Nic się przy tym nie dubluje ani nie
+nadpisuje — dni już pobrane zostają nietknięte.
+
+Dlaczego takie dni są pomijane, a nie zapisywane jako puste: panel zostawia
+wtedy na ekranie dania z poprzedniego dnia. Zapisanie tego, co widać, wpisałoby
+obiad z 16 września pod datę 17 września — po cichu, bez żadnego błędu.
+
 ## Archiwum jadłospisu
 
 Każdy przebieg dopisuje dni do `~/Documents/kuchnia-vikinga/jadlospis.csv` —
@@ -234,8 +248,8 @@ Skrypt użyje wtedy Twojego Chrome'a zamiast pobierać własnego Chromium.
 | Logowanie się nie udaje | `KV_HEADLESS=0 npm run sync:dry` i zobacz, co pokazuje panel |
 | `CybotCookiebotDialog intercepts pointer events` | Baner zgód zasłonił przycisk. Naprawione — zrób `git pull` i uruchom ponownie |
 | `command not found: node` | `brew install node`, potem otwórz Terminal od nowa |
-| `brak posiłków (dzień bez dostawy)` przy każdym dniu | Panel dociąga jadłospis wolniej niż zwykle. Zwiększ cierpliwość: `KV_MEALS_TIMEOUT=20000 npm run sync:dry` |
-| `panel nie odświeżył listy posiłków` | Zabezpieczenie przed zapisaniem jadłospisu poprzedniego dnia pod złą datą — dzień jest świadomie pomijany |
+| `brak posiłków (dzień bez dostawy)` przy każdym dniu | Panel dociąga jadłospis wolniej niż zwykle. Zwiększ cierpliwość: `KV_MEALS_TIMEOUT=30000 npm run sync:dry` |
+| `jadłospis jeszcze nieopublikowany` | Normalne. Catering publikuje menu z wyprzedzeniem kilkunastu dni — te dni dojdą same przy kolejnych uruchomieniach |
 | Zero pobranych dni | `npm run diagnose` — wypisze każdy dzień z kalendarza i zrobi zrzut ekranu `panel.png` |
 | Dni są, ale poza zakresem | Diagnoza pokaże zakres panelu; uruchom np. `node agent/sync-to-calendar.mjs --from 2026-09-02 --to 2026-09-22` |
 

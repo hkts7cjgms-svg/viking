@@ -90,7 +90,7 @@ function loginPage( failed, bannerMode ) {
 </body></html>`;
 }
 
-function dashboardPage( noOrder, sticky, blockPointer, flaky ) {
+function dashboardPage( noOrder, sticky, blockPointer, flaky, narrow ) {
 	const dayTile = ( date ) => `
 		<div data-date="${ date }">
 			<div class="relative inline-block group">
@@ -117,7 +117,9 @@ function dashboardPage( noOrder, sticky, blockPointer, flaky ) {
 	${ blockPointer
 		? '<div id="pointerBlocker" style="position:fixed;inset:0;z-index:2147483000;background:transparent"></div>'
 		: '' }
-	<div class="calendar-slider-items">${ DATES.map( dayTile ).join( '' ) }</div>
+	<div class="calendar-slider" style="${ narrow ? 'width:160px;overflow-x:auto;white-space:nowrap' : '' }">
+		<div class="calendar-slider-items" style="${ narrow ? 'display:inline-flex;width:max-content' : '' }">${ DATES.map( dayTile ).join( '' ) }</div>
+	</div>
 	<div id="dayDetailsCard"><div class="card-header"><h3 id="day-details-date"></h3></div>
 		<div class="card-body"><ul class="dashboard-meals-list"></ul></div>
 	</div>
@@ -125,6 +127,7 @@ function dashboardPage( noOrder, sticky, blockPointer, flaky ) {
 	<script>
 		var STICKY = ${ JSON.stringify( Boolean( sticky ) ) };
 		var FLAKY = ${ JSON.stringify( Boolean( flaky ) ) };
+		var NARROW = ${ JSON.stringify( Boolean( narrow ) ) };
 		var seen = {};
 		var MENU = ${ JSON.stringify( MENU ) };
 		var DETAILS = ${ JSON.stringify( DETAILS ) };
@@ -153,6 +156,22 @@ function dashboardPage( noOrder, sticky, blockPointer, flaky ) {
 			if ( FLAKY && ! initial && ! seen[ date ] ) {
 				seen[ date ] = true;
 				return;
+			}
+
+			// NARROW = panel dociaga jadlospis tylko dla kafelka widocznego
+			// w suwaku. Bez przewiniecia dalsze dni nigdy sie nie wczytuja.
+			if ( NARROW && ! initial ) {
+				var tile = document.querySelector( '[data-date="' + date + '"] li.day' );
+				var slider = document.querySelector( '.calendar-slider' );
+
+				if ( tile && slider ) {
+					var t = tile.getBoundingClientRect();
+					var box = slider.getBoundingClientRect();
+
+					if ( t.left < box.left - 1 || t.right > box.right + 1 ) {
+						return;
+					}
+				}
 			}
 
 			// Panel dociaga posilki z serwera - przez ten czas na ekranie wisi
@@ -251,7 +270,7 @@ export function startFakePanel( options = {} ) {
 
 			res.writeHead( 200, { 'Content-Type': 'text/html; charset=utf-8' } );
 
-			return res.end( dashboardPage( Boolean( options.noOrder ), Boolean( options.stickySelection ), Boolean( options.blockPointer ), Boolean( options.flakyMeals ) ) );
+			return res.end( dashboardPage( Boolean( options.noOrder ), Boolean( options.stickySelection ), Boolean( options.blockPointer ), Boolean( options.flakyMeals ), Boolean( options.narrowCalendar ) ) );
 		}
 
 		res.writeHead( 404 );

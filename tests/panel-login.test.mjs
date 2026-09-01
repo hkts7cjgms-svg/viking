@@ -300,6 +300,34 @@ const sessionPath = join( dir, 'session.json' );
 	}
 }
 
+// --- dni poza widokiem suwaka kalendarza --------------------------------
+// Kalendarz jest wezszy niz liczba dni. Panel dociaga jadlospis tylko dla
+// kafelka widocznego w suwaku, wiec dni z prawej strony wymagaja przewiniecia.
+// Klikniecie programowe samo z siebie niczego nie przewija.
+{
+	const narrow = await startFakePanel( { narrowCalendar: true } );
+
+	try {
+		const days = await withPanel(
+			{
+				panelUrl: narrow.url,
+				user: credentials.user,
+				password: credentials.password,
+				timeout: 20000,
+			},
+			( page ) => collectDays( page, { from: '2026-09-01', mealsTimeout: 3000 } )
+		);
+
+		same( 2, days.length, 'dzień poza widokiem suwaka też jest pobierany' );
+		same( '2026-09-04', days[ 1 ].date, 'przewinięty dzień ma właściwą datę' );
+		ok( days[ 1 ].meals[ 0 ].description.includes( 'Gulasz' ), 'jadłospis pochodzi z przewiniętego dnia' );
+	} catch ( error ) {
+		failures.push( `dzień poza widokiem suwaka zablokował odczyt: ${ error.message }` );
+	} finally {
+		narrow.server.close();
+	}
+}
+
 // --- konto bez aktywnego zamowienia -------------------------------------
 // Pulpit jest, kalendarza nie ma. To NIE jest bląd logowania - ma się skończyć
 // pustą listą i zrozumiałym komunikatem, a nie wyjątkiem.

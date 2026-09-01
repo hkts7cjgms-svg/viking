@@ -373,16 +373,23 @@ export async function collectDays( page, opts = {} ) {
 			if ( 'swieze' !== freshness ) {
 				log( `  ${ date }: lista się nie odświeżyła, próbuję jeszcze raz…` );
 
-				await page.locator( `#calendar-day-${ date }` ).first().dispatchEvent( 'click' ).catch( () => {} );
+				const tile = page.locator( `#calendar-day-${ date }` ).first();
+
+				await tile.scrollIntoViewIfNeeded( { timeout: 3000 } ).catch( () => {} );
+				await page.waitForTimeout( 400 );
+				await tile.click( { timeout: 3000 } ).catch( () => {} );
+				await tile.dispatchEvent( 'click' ).catch( () => {} );
 
 				freshness = await waitForFreshMeals( page, before, mealsTimeout );
 			}
 
 			if ( 'nieodswiezone' === freshness ) {
-				// Lista nadal pokazuje poprzedni dzien - lepiej pominac niz
-				// zapisac cudzy jadlospis pod ta data.
+				// Panel zostawil na ekranie dania poprzedniego dnia. W praktyce
+				// znaczy to, ze na ten dzien nie ma jeszcze jadlospisu: catering
+				// publikuje menu z wyprzedzeniem kilkunastu dni. Zapisanie tego,
+				// co widac, wpisaloby cudze dania pod ta date.
 				skipped.push( date );
-				log( `  ${ date }: panel nie odświeżył listy posiłków, pomijam.` );
+				log( `  ${ date }: jadłospis jeszcze nieopublikowany, pomijam.` );
 				continue;
 			}
 		}
@@ -421,9 +428,9 @@ export async function collectDays( page, opts = {} ) {
 
 	if ( skipped.length ) {
 		log(
-			`Pominięto ${ skipped.length } dni, bo panel nie zdążył odświeżyć listy: ${ skipped.join( ', ' ) }.`
+			`Pominięto ${ skipped.length } dni bez opublikowanego jadłospisu: ${ skipped.join( ', ' ) }.`
 		);
-		log( 'Na wolniejszym łączu pomaga: KV_MEALS_TIMEOUT=30000 npm run sync' );
+		log( 'Dojdą same, gdy catering je opublikuje — kolejne uruchomienia je dobiorą.' );
 	}
 
 	return days;
@@ -583,6 +590,12 @@ async function openDay( page, date ) {
 		if ( 0 === ( await target.count().catch( () => 0 ) ) ) {
 			continue;
 		}
+
+		// Kalendarz to poziomy suwak. Dni z prawej strony bywaja poza widokiem,
+		// a panel dociaga ich jadlospis dopiero, gdy kafelek trafi na ekran -
+		// klikniecie programowe samo z siebie niczego nie przewija.
+		await target.scrollIntoViewIfNeeded( { timeout: 3000 } ).catch( () => {} );
+		await page.waitForTimeout( 200 );
 
 		await target.click( { timeout: 3000 } ).catch( () => {} );
 
