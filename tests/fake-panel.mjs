@@ -17,7 +17,9 @@ const MENU = {
 	'2026-09-04': [ [ 4204330, 'Obiad', 'Gulasz wieprzowy z kaszą gryczaną', 612 ] ],
 };
 
-const DISABLED = [ '2026-09-01', '2026-09-03' ];
+// 2026-09-02 jest is-disabled, a mimo to ma pelny jadlospis - dokladnie jak w panelu.
+const DISABLED = [ '2026-09-01', '2026-09-02', '2026-09-03' ];
+const LABELS = { '2026-09-02': 'Zobacz', '2026-09-04': 'Edytuj' };
 const DATES = [ '2026-09-01', '2026-09-02', '2026-09-03', '2026-09-04' ];
 
 const DETAILS = {
@@ -92,9 +94,10 @@ function dashboardPage() {
 	const dayTile = ( date ) => `
 		<div data-date="${ date }">
 			<div class="relative inline-block group">
-				<li class="day${ DISABLED.includes( date ) ? ' is-disabled' : '' }${ '2026-09-02' === date ? ' is-selected is-active' : '' }">
+				<li class="day${ DISABLED.includes( date ) ? ' is-disabled' : '' }${ LABELS[ date ] ? ' is-active' : '' }${ '2026-09-02' === date ? ' is-selected' : '' }">
 					<div data-date="${ date }" id="calendar-day-${ date }" role="button" tabindex="0">
 						<div class="day-header"><div class="h300 day-number">${ Number( date.slice( 8 ) ) }</div></div>
+						<div class="day-label">${ LABELS[ date ] || '' }</div>
 					</div>
 				</li>
 			</div>

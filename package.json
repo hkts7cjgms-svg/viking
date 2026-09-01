@@ -6,7 +6,8 @@
   "scripts": {
     "test": "bash tests/run.sh",
     "sync": "node agent/sync-to-calendar.mjs",
-    "sync:dry": "node agent/sync-to-calendar.mjs --dry-run"
+    "sync:dry": "node agent/sync-to-calendar.mjs --dry-run",
+    "diagnose": "node agent/diagnose.mjs"
   },
   "devDependencies": {
     "jsdom": "^30.0.1"

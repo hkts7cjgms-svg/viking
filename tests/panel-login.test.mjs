@@ -75,8 +75,10 @@ const sessionPath = join( dir, 'session.json' );
 
 	same( 1, state.logins, 'pierwsze uruchomienie loguje się raz' );
 	ok( existsSync( sessionPath ), 'sesja jest zapisana na dysk' );
-	same( 2, days.length, 'zebrane oba dni z posiłkami (wygaszone pominięte)' );
-	same( '2026-09-02', days[ 0 ].date, 'pierwszy dzień to środa' );
+	same( 2, days.length, 'zebrane oba dni z posiłkami, dni bez etykiety pominięte' );
+	// 2026-09-02 ma klasę is-disabled, a mimo to pełny jadłospis - dokładnie jak
+	// w prawdziwym panelu. Pomijanie takich dni było błędem, który to wyłapuje.
+	same( '2026-09-02', days[ 0 ].date, 'dzień oznaczony is-disabled też jest pobierany' );
 	same( 3, days[ 0 ].meals.length, 'środa ma trzy posiłki' );
 	same( 'obiad', days[ 1 ].meals[ 0 ].slug, 'piątek ma obiad' );
 	ok(

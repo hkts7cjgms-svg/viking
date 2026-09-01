@@ -14,6 +14,7 @@
 export function extractDates() {
 	var holders = document.querySelectorAll( '.calendar-slider-items [data-date]' );
 	var dates = [];
+	var days = [];
 	var selected = null;
 
 	for ( var i = 0; i < holders.length; i++ ) {
@@ -24,16 +25,33 @@ export function extractDates() {
 			continue;
 		}
 
-		if ( -1 === dates.indexOf( date ) ) {
-			dates.push( date );
+		if ( -1 !== dates.indexOf( date ) ) {
+			continue;
 		}
 
-		if ( holder.querySelector( 'li.day.is-selected' ) ) {
+		var tile = holder.querySelector( 'li.day' );
+		var labelNode = holder.querySelector( '.day-label' );
+		var label = labelNode ? labelNode.textContent.replace( /\s+/g, ' ' ).trim() : '';
+
+		dates.push( date );
+
+		days.push( {
+			date: date,
+			// "Zobacz" albo "Edytuj" - tylko takie dni maja co pokazac.
+			label: label,
+			isActive: Boolean( tile && tile.classList.contains( 'is-active' ) ),
+			// UWAGA: w tym panelu is-disabled znaczy "nie mozesz juz zmienic",
+			// a nie "brak danych". Dzien z jadlospisem bywa is-disabled.
+			isDisabled: Boolean( tile && tile.classList.contains( 'is-disabled' ) ),
+			isSelected: Boolean( tile && tile.classList.contains( 'is-selected' ) ),
+		} );
+
+		if ( tile && tile.classList.contains( 'is-selected' ) ) {
 			selected = date;
 		}
 	}
 
-	return { dates: dates, selected: selected };
+	return { dates: dates, days: days, selected: selected };
 }
 
 /**

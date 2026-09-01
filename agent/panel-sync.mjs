@@ -262,23 +262,52 @@ async function loginFailureReason( page ) {
  */
 export async function collectDays( page, opts = {} ) {
 	const log = opts.log || ( () => {} );
-	const { dates } = await page.evaluate( extractDates );
+	const calendar = await page.evaluate( extractDates );
+	const all = calendar.days || [];
 
-	const wanted = dates.filter( ( date ) => {
-		if ( opts.from && date < opts.from ) {
+	if ( 0 === all.length ) {
+		log( 'Kalendarz jest pusty — panel nie pokazał żadnego dnia. Czy zamówienie jest aktywne?' );
+
+		return [];
+	}
+
+	const inRange = all.filter( ( day ) => {
+		if ( opts.from && day.date < opts.from ) {
 			return false;
 		}
 
-		return ! ( opts.to && date > opts.to );
+		return ! ( opts.to && day.date > opts.to );
 	} );
 
-	log( `Kalendarz pokazuje ${ dates.length } dni, do pobrania ${ wanted.length }.` );
+	// Dzien "ma co pokazac", gdy niesie etykietę (Zobacz / Edytuj) albo jest aktywny.
+	// Klasa is-disabled NIE dyskwalifikuje - w tym panelu znaczy tylko tyle, że
+	// zamówienia na ten dzień nie da się już zmienić.
+	let wanted = inRange.filter( ( day ) => '' !== day.label || day.isActive );
+
+	if ( 0 === wanted.length && inRange.length ) {
+		// Panel mógł zmienić wygląd - lepiej spróbować wszystkich niż nic nie pobrać.
+		log( 'Żaden dzień nie ma etykiety — próbuję otworzyć wszystkie dni z zakresu.' );
+		wanted = inRange;
+	}
+
+	log(
+		`Kalendarz: ${ all.length } dni, w zakresie ${ inRange.length }, ` +
+			`z jadłospisem do sprawdzenia ${ wanted.length }.`
+	);
+
+	if ( 0 === wanted.length ) {
+		const first = all[ 0 ]?.date;
+		const last = all[ all.length - 1 ]?.date;
+
+		log( `Panel pokazuje dni ${ first } … ${ last } — poza zakresem ${ opts.from } … ${ opts.to }.` );
+		log( 'Podpowiedź: rozszerz zakres, np. --from ' + first + ' --to ' + last );
+	}
 
 	const days = [];
 
-	for ( const date of wanted ) {
+	for ( const { date } of wanted ) {
 		if ( ! ( await openDay( page, date ) ) ) {
-			log( `  ${ date }: dzień niedostępny, pomijam.` );
+			log( `  ${ date }: nie udało się otworzyć, pomijam.` );
 			continue;
 		}
 
@@ -315,12 +344,14 @@ async function openDay( page, date ) {
 		return false;
 	}
 
-	// Dni bez dostawy sa wygaszone - nie ma czego z nich czytac.
-	if ( await tile.evaluate( ( node ) => node.classList.contains( 'is-disabled' ) ) ) {
+	// Klikamy kazdy dzien, ktory kalendarz w ogole pokazuje. O tym, czy dzien
+	// da sie otworzyc, rozstrzyga sprawdzenie ponizej - nie klasy CSS, bo
+	// is-disabled w tym panelu wystepuje takze na dniach z pelnym jadlospisem.
+	try {
+		await tile.click( { timeout: 5000 } );
+	} catch {
 		return false;
 	}
-
-	await tile.click();
 
 	try {
 		await page.waitForFunction(
@@ -336,7 +367,7 @@ async function openDay( page, date ) {
 				return false;
 			},
 			date,
-			{ timeout: 10000 }
+			{ timeout: 4000 }
 		);
 	} catch {
 		return false;
