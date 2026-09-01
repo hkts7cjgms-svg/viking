@@ -344,6 +344,7 @@ export async function collectDays( page, opts = {} ) {
 	}
 
 	const days = [];
+	const skipped = [];
 
 	for ( const { date } of wanted ) {
 		// Dzien juz otwarty nie przeladowuje listy - nie ma na co czekac.
@@ -357,17 +358,30 @@ export async function collectDays( page, opts = {} ) {
 			continue;
 		}
 
-		const mealsTimeout = opts.mealsTimeout || 10000;
+		const mealsTimeout = opts.mealsTimeout || 15000;
 
 		if ( alreadyOpen ) {
 			// Dzien moze byc otwarty, a posilki wciaz sie doczytywac.
 			await waitForAnyMeals( page, mealsTimeout );
 		} else {
-			const freshness = await waitForFreshMeals( page, before, mealsTimeout );
+			let freshness = await waitForFreshMeals( page, before, mealsTimeout );
+
+			// Jedna ponowna proba: panel bywa wolniejszy przy dalszych dniach,
+			// a przeoczony dzien to strata calego jadlospisu z tej daty.
+			// Probujemy takze przy pustej liscie - dzien z etykieta powinien
+			// miec posilki, wiec pustka rownie dobrze moze byc nieudanym odczytem.
+			if ( 'swieze' !== freshness ) {
+				log( `  ${ date }: lista się nie odświeżyła, próbuję jeszcze raz…` );
+
+				await page.locator( `#calendar-day-${ date }` ).first().dispatchEvent( 'click' ).catch( () => {} );
+
+				freshness = await waitForFreshMeals( page, before, mealsTimeout );
+			}
 
 			if ( 'nieodswiezone' === freshness ) {
 				// Lista nadal pokazuje poprzedni dzien - lepiej pominac niz
 				// zapisac cudzy jadlospis pod ta data.
+				skipped.push( date );
 				log( `  ${ date }: panel nie odświeżył listy posiłków, pomijam.` );
 				continue;
 			}
@@ -400,6 +414,16 @@ export async function collectDays( page, opts = {} ) {
 
 		log( `  ${ date }: ${ day.meals.length } posiłków.` );
 		days.push( day );
+
+		// Chwila oddechu miedzy dniami - panel odpowiada wtedy pewniej.
+		await page.waitForTimeout( 300 );
+	}
+
+	if ( skipped.length ) {
+		log(
+			`Pominięto ${ skipped.length } dni, bo panel nie zdążył odświeżyć listy: ${ skipped.join( ', ' ) }.`
+		);
+		log( 'Na wolniejszym łączu pomaga: KV_MEALS_TIMEOUT=30000 npm run sync' );
 	}
 
 	return days;

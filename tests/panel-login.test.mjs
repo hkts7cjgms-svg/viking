@@ -271,6 +271,35 @@ const sessionPath = join( dir, 'session.json' );
 	}
 }
 
+// --- panel nie doczytuje posilkow za pierwszym razem --------------------
+// Tak zachowywal sie panel przy dalszych dniach jadlospisu: dzien sie otwieral,
+// ale lista posilkow zostawala z poprzedniego. Ponowna proba to ratuje.
+{
+	const flaky = await startFakePanel( { flakyMeals: true } );
+
+	try {
+		const days = await withPanel(
+			{
+				panelUrl: flaky.url,
+				user: credentials.user,
+				password: credentials.password,
+				timeout: 20000,
+			},
+			( page ) => collectDays( page, { from: '2026-09-01', mealsTimeout: 2500 } )
+		);
+
+		same( 2, days.length, 'ponowna próba ratuje dzień, który nie doczytał się za pierwszym razem' );
+		ok(
+			days[ 1 ].meals[ 0 ].description.includes( 'Gulasz' ),
+			'po ponownej próbie jadłospis należy do właściwego dnia'
+		);
+	} catch ( error ) {
+		failures.push( `nieodświeżona lista zablokowała odczyt: ${ error.message }` );
+	} finally {
+		flaky.server.close();
+	}
+}
+
 // --- konto bez aktywnego zamowienia -------------------------------------
 // Pulpit jest, kalendarza nie ma. To NIE jest bląd logowania - ma się skończyć
 // pustą listą i zrozumiałym komunikatem, a nie wyjątkiem.

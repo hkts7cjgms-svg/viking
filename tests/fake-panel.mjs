@@ -90,7 +90,7 @@ function loginPage( failed, bannerMode ) {
 </body></html>`;
 }
 
-function dashboardPage( noOrder, sticky, blockPointer ) {
+function dashboardPage( noOrder, sticky, blockPointer, flaky ) {
 	const dayTile = ( date ) => `
 		<div data-date="${ date }">
 			<div class="relative inline-block group">
@@ -124,13 +124,15 @@ function dashboardPage( noOrder, sticky, blockPointer ) {
 	<div id="sideBar"></div>
 	<script>
 		var STICKY = ${ JSON.stringify( Boolean( sticky ) ) };
+		var FLAKY = ${ JSON.stringify( Boolean( flaky ) ) };
+		var seen = {};
 		var MENU = ${ JSON.stringify( MENU ) };
 		var DETAILS = ${ JSON.stringify( DETAILS ) };
 
 		var MONTHS = [ 'stycznia', 'lutego', 'marca', 'kwietnia', 'maja', 'czerwca',
 			'lipca', 'sierpnia', 'września', 'października', 'listopada', 'grudnia' ];
 
-		function render( date ) {
+		function render( date, initial ) {
 			// STICKY = panel aktualizuje kartę dnia, ale NIE przesuwa is-selected.
 			// Tak zachowuje się prawdziwy panel i na tym wykładał się odczyt.
 			if ( ! STICKY ) {
@@ -145,6 +147,13 @@ function dashboardPage( noOrder, sticky, blockPointer ) {
 				'Dzień, ' + Number( parts[ 2 ] ) + ' ' + MONTHS[ Number( parts[ 1 ] ) - 1 ];
 
 			var list = document.querySelector( '.dashboard-meals-list' );
+
+			// FLAKY = przy pierwszym wejsciu panel nie doczytuje posilkow.
+			// Tak zachowywal sie panel przy dalszych dniach jadlospisu.
+			if ( FLAKY && ! initial && ! seen[ date ] ) {
+				seen[ date ] = true;
+				return;
+			}
 
 			// Panel dociaga posilki z serwera - przez ten czas na ekranie wisi
 			// jeszcze jadlospis poprzedniego dnia.
@@ -194,7 +203,7 @@ function dashboardPage( noOrder, sticky, blockPointer ) {
 			} );
 		} );
 
-		render( '2026-09-02' );
+		render( '2026-09-02', true );
 	</script>
 </body></html>`;
 }
@@ -242,7 +251,7 @@ export function startFakePanel( options = {} ) {
 
 			res.writeHead( 200, { 'Content-Type': 'text/html; charset=utf-8' } );
 
-			return res.end( dashboardPage( Boolean( options.noOrder ), Boolean( options.stickySelection ), Boolean( options.blockPointer ) ) );
+			return res.end( dashboardPage( Boolean( options.noOrder ), Boolean( options.stickySelection ), Boolean( options.blockPointer ), Boolean( options.flakyMeals ) ) );
 		}
 
 		res.writeHead( 404 );

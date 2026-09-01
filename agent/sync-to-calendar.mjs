@@ -158,7 +158,7 @@ async function main() {
 				// Wchodzenie w kazdy posilek wydluza przebieg, wiec domyslnie wylaczone.
 				details: Boolean( flags.details ) || '1' === process.env.KV_FETCH_DETAILS,
 				// Ile czekac, az panel doczyta posilki po przelaczeniu dnia.
-				mealsTimeout: Number( process.env.KV_MEALS_TIMEOUT || 10000 ),
+				mealsTimeout: Number( process.env.KV_MEALS_TIMEOUT || 15000 ),
 			} )
 	);
 
