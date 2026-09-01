@@ -24,15 +24,47 @@ const DETAILS = {
 	4204326: 'Skład|mąka pszenna, ziemniaki, twaróg, boczek, kapusta kiszona::Alergeny|gluten, mleko',
 };
 
-function loginPage( failed ) {
+function loginPage( failed, bannerMode ) {
 	return `<!doctype html><html lang="pl-PL"><body>
-	<form class="_login-header_11a5k_84">
-		${ failed ? '<div role="alert">Nieprawidłowy email lub hasło</div>' : '' }
-		<input id="username" name="username" type="text" placeholder="Podaj adres email">
-		<input id="password" name="password" type="password" placeholder="Podaj hasło">
-		<button class="button login-action-button" disabled type="submit"><span class="button-label">Zaloguj</span></button>
-	</form>
+	<!-- Baner zgod jak Cookiebot: doczytuje sie z opoznieniem i zaslania formularz. -->
 	<script>
+		setTimeout(function () {
+			var underlay = document.createElement('div');
+			underlay.id = 'CybotCookiebotDialogBodyUnderlay';
+			underlay.setAttribute('style', 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:2147483640');
+
+			var dialog = document.createElement('div');
+			dialog.id = 'CybotCookiebotDialog';
+			dialog.setAttribute('style', 'position:fixed;inset:0;z-index:2147483641;background:#fff;padding:40px');
+			dialog.innerHTML = ${ JSON.stringify( bannerMode ) } === 'stubborn'
+				? '<p>Ta strona używa plików cookie.</p><span role="link">Ustawienia</span>'
+				: '<p>Ta strona używa plików cookie.</p>' +
+					'<button id="CybotCookiebotDialogBodyLevelButtonLevelOptinAllowAll" type="button">Zezwól na wszystkie</button>';
+
+			document.body.appendChild(underlay);
+			document.body.appendChild(dialog);
+			document.body.style.overflow = 'hidden';
+
+			dialog.querySelector('button').addEventListener('click', function () {
+				underlay.remove();
+				dialog.remove();
+				document.body.style.overflow = '';
+			});
+		}, 200);
+	</script>
+	<div id="app"></div>
+	<script>
+		// Prawdziwy panel to React - formularz pojawia sie dopiero po starcie
+		// aplikacji, wiec baner zgod zdazy sie wyswietlic przed nim.
+		setTimeout(function () {
+			document.getElementById('app').innerHTML = ${ JSON.stringify(
+				`<form class="_login-header_11a5k_84">${ failed ? '<div role="alert">Nieprawidłowy email lub hasło</div>' : '' }<input id="username" name="username" type="text" placeholder="Podaj adres email"><input id="password" name="password" type="password" placeholder="Podaj hasło"><button class="button login-action-button" disabled type="submit"><span class="button-label">Zaloguj</span></button></form>`
+			) };
+			start();
+		}, 900);
+	</script>
+	<script>
+		function start() {
 		// Tak jak w prawdziwym panelu: przycisk odblokowuje sie po wypelnieniu pol.
 		var u = document.getElementById('username');
 		var p = document.getElementById('password');
@@ -51,6 +83,7 @@ function loginPage( failed ) {
 				else { window.location.href = '/logowanie?blad=1'; }
 			});
 		});
+		}
 	</script>
 </body></html>`;
 }
@@ -125,7 +158,7 @@ function dashboardPage() {
 </body></html>`;
 }
 
-export function startFakePanel() {
+export function startFakePanel( options = {} ) {
 	const state = { logins: 0 };
 
 	const server = createServer( ( req, res ) => {
@@ -156,7 +189,7 @@ export function startFakePanel() {
 		if ( '/logowanie' === url.pathname ) {
 			res.writeHead( 200, { 'Content-Type': 'text/html; charset=utf-8' } );
 
-			return res.end( loginPage( '1' === url.searchParams.get( 'blad' ) ) );
+			return res.end( loginPage( '1' === url.searchParams.get( 'blad' ), options.bannerMode || 'accept' ) );
 		}
 
 		if ( '/' === url.pathname ) {

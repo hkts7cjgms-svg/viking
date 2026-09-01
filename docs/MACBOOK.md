@@ -230,6 +230,7 @@ Skrypt użyje wtedy Twojego Chrome'a zamiast pobierać własnego Chromium.
 | `Nie znalazłem kalendarza "Jadłospis"` | Załóż kalendarz o tej nazwie (krok 3) albo popraw `KV_APPLE_CALENDAR` |
 | `macOS nie pozwolił sterować Kalendarzem` | Ustawienia → Prywatność i ochrona → Automatyzacja → Terminal → Kalendarz |
 | Logowanie się nie udaje | `KV_HEADLESS=0 npm run sync:dry` i zobacz, co pokazuje panel |
+| `CybotCookiebotDialog intercepts pointer events` | Baner zgód zasłonił przycisk. Naprawione — zrób `git pull` i uruchom ponownie |
 | `command not found: node` | `brew install node`, potem otwórz Terminal od nowa |
 | Zero pobranych dni | Sprawdź, czy zamówienie jest aktywne i czy `--days` obejmuje jego termin |
 

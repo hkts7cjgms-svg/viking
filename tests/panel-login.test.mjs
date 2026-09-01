@@ -155,6 +155,31 @@ const sessionPath = join( dir, 'session.json' );
 	);
 }
 
+// --- baner zgod bez rozpoznawalnego przycisku ---------------------------
+// Ostatnia deska ratunku: usuniecie nakladki z DOM. Bez tego logowanie
+// konczy sie bledem "CybotCookiebotDialog intercepts pointer events".
+{
+	const stubborn = await startFakePanel( { bannerMode: 'stubborn' } );
+
+	try {
+		const days = await withPanel(
+			{
+				panelUrl: stubborn.url,
+				user: credentials.user,
+				password: credentials.password,
+				timeout: 15000,
+			},
+			( page ) => collectDays( page, {} )
+		);
+
+		ok( days.length > 0, 'baner bez przycisku zgody nie blokuje logowania' );
+	} catch ( error ) {
+		failures.push( `baner bez przycisku zgody zablokował logowanie: ${ error.message }` );
+	} finally {
+		stubborn.server.close();
+	}
+}
+
 server.close();
 rmSync( dir, { recursive: true, force: true } );
 

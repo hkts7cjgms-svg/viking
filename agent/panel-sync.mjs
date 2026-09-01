@@ -31,11 +31,27 @@ const SELECTORS = {
 	loginForm: '#username',
 };
 
-/** Banery zgod potrafia zaslonic przycisk logowania. */
+/**
+ * Banery zgod zaslaniaja przycisk logowania. Doczytuja sie z zewnetrznego CDN,
+ * wiec pojawiaja sie PO zaladowaniu strony - czekamy na nie, zamiast sprawdzac raz.
+ */
 const COOKIE_BUTTONS = [
 	'#CybotCookiebotDialogBodyLevelButtonLevelOptinAllowAll',
 	'#CybotCookiebotDialogBodyButtonAccept',
+	'#CybotCookiebotDialogBodyButtonAcceptAll',
 	'#CybotCookiebotDialogBodyLevelButtonAccept',
+	'#onetrust-accept-btn-handler',
+	'.cookie-accept-all',
+];
+
+/** Kontenery banerow, ktore usuwamy z DOM, gdy klikniecie zawiedzie. */
+const COOKIE_CONTAINERS = [
+	'#CybotCookiebotDialog',
+	'#CybotCookiebotDialogBodyUnderlay',
+	'#CookiebotWidget',
+	'#CookiebotWidgetUnderlay',
+	'#onetrust-consent-sdk',
+	'[id^="CybotCookiebotDialog"]',
 ];
 
 export class PanelLoginError extends Error {}
@@ -68,7 +84,7 @@ export async function withPanel( options, callback ) {
 		page.setDefaultTimeout( timeout );
 
 		await page.goto( `${ panelUrl }/`, { waitUntil: 'domcontentloaded' } );
-		await dismissCookieBanner( page );
+		await dismissCookieBanner( page, { timeout: 1500 } );
 
 		if ( await isLoggedIn( page, timeout ) ) {
 			log( 'Sesja z poprzedniego uruchomienia nadal ważna — logowanie pominięte.' );
@@ -102,20 +118,65 @@ async function isLoggedIn( page, timeout ) {
 	return 0 < ( await page.locator( SELECTORS.calendar ).count() );
 }
 
-async function dismissCookieBanner( page ) {
-	for ( const selector of COOKIE_BUTTONS ) {
-		const button = page.locator( selector );
+/**
+ * Zamyka baner zgod. Trzy podejscia po kolei, bo kazdy dostawca robi to inaczej:
+ * przycisk po identyfikatorze, przycisk po tresci, a na koniec usuniecie
+ * nakladki z DOM. Ostatnie jest bezpieczne - to warstwa na wierzchu, nie aplikacja.
+ *
+ * @param {object} page Strona Playwrighta.
+ * @param {object} opts { timeout } - ile czekac na pojawienie sie baneru.
+ */
+async function dismissCookieBanner( page, opts = {} ) {
+	const timeout = opts.timeout ?? 4000;
+	const accept = page.locator( COOKIE_BUTTONS.join( ', ' ) ).first();
 
-		try {
-			if ( await button.isVisible( { timeout: 1000 } ) ) {
-				await button.click( { timeout: 2000 } );
+	try {
+		await accept.waitFor( { state: 'visible', timeout } );
+		await accept.click( { timeout: 5000 } );
+		await page.waitForTimeout( 300 );
 
-				return;
-			}
-		} catch {
-			// Baneru nie ma albo znikl sam - to nie jest blad.
-		}
+		return 'kliknięty';
+	} catch {
+		// Baneru nie ma, ma inny przycisk albo klikniecie nie doszlo - probujemy dalej.
 	}
+
+	const byText = page
+		.getByRole( 'button', { name: /zezwól|akceptuj|zgadzam|zgoda|accept|allow/i } )
+		.first();
+
+	try {
+		if ( 0 < ( await byText.count() ) ) {
+			await byText.click( { timeout: 3000 } );
+			await page.waitForTimeout( 300 );
+
+			return 'kliknięty';
+		}
+	} catch {
+		// Trudno - zostaje usuniecie z DOM.
+	}
+
+	const removed = await page.evaluate( ( selectors ) => {
+		var count = 0;
+
+		for ( var i = 0; i < selectors.length; i++ ) {
+			var nodes = document.querySelectorAll( selectors[ i ] );
+
+			for ( var n = 0; n < nodes.length; n++ ) {
+				nodes[ n ].remove();
+				count++;
+			}
+		}
+
+		// Banery blokuja przewijanie - przywracamy je razem z usunieciem nakladki.
+		if ( count ) {
+			document.body.style.overflow = '';
+			document.documentElement.style.overflow = '';
+		}
+
+		return count;
+	}, COOKIE_CONTAINERS );
+
+	return removed ? 'usunięty z DOM' : 'brak';
 }
 
 async function login( page, { panelUrl, user, password, timeout, log } ) {
@@ -126,8 +187,15 @@ async function login( page, { panelUrl, user, password, timeout, log } ) {
 	log( 'Sesja wygasła — loguję się do panelu…' );
 
 	await page.goto( `${ panelUrl }/logowanie`, { waitUntil: 'domcontentloaded' } );
-	await dismissCookieBanner( page );
 	await page.waitForSelector( SELECTORS.user, { timeout } );
+
+	// Dopiero teraz, gdy formularz stoi: baner doczytuje sie z opoznieniem i
+	// potrafi wejsc na wierzch juz po zaladowaniu strony.
+	const banner = await dismissCookieBanner( page );
+
+	if ( 'brak' !== banner ) {
+		log( `Baner zgód: ${ banner }.` );
+	}
 
 	await page.fill( SELECTORS.user, user );
 	await page.fill( SELECTORS.password, password );
