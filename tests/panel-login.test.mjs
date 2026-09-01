@@ -203,6 +203,39 @@ const sessionPath = join( dir, 'session.json' );
 	same( '2026-09-04', unbounded[ 1 ].date, 'ostatni dzień jadłospisu nie wypada za burtę' );
 }
 
+// --- panel nie przesuwa is-selected -------------------------------------
+// Tak zachowuje sie prawdziwy panel: karta dnia sie zmienia, ale klasa
+// is-selected zostaje na starym kafelku. Odczyt musi opierac sie na naglowku
+// karty dnia, nie na klasach CSS - inaczej wszystkie dni sa pomijane.
+{
+	const sticky = await startFakePanel( { stickySelection: true } );
+
+	try {
+		const days = await withPanel(
+			{
+				panelUrl: sticky.url,
+				user: credentials.user,
+				password: credentials.password,
+				timeout: 15000,
+			},
+			( page ) => collectDays( page, { from: '2026-09-01' } )
+		);
+
+		same( 2, days.length, 'dni zbierane mimo nieruchomej klasy is-selected' );
+		same( '2026-09-02', days[ 0 ].date, 'pierwszy dzień ma właściwą datę z nagłówka' );
+		same( '2026-09-04', days[ 1 ].date, 'drugi dzień ma właściwą datę z nagłówka' );
+		same( 1, days[ 1 ].meals.length, 'posiłki należą do właściwego dnia' );
+		ok(
+			days[ 1 ].meals[ 0 ].description.includes( 'Gulasz' ),
+			'treść posiłku pochodzi z otwartego dnia, nie z poprzedniego'
+		);
+	} catch ( error ) {
+		failures.push( `nieruchome is-selected zablokowało odczyt: ${ error.message }` );
+	} finally {
+		sticky.server.close();
+	}
+}
+
 // --- konto bez aktywnego zamowienia -------------------------------------
 // Pulpit jest, kalendarza nie ma. To NIE jest bląd logowania - ma się skończyć
 // pustą listą i zrozumiałym komunikatem, a nie wyjątkiem.

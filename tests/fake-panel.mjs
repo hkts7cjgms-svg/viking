@@ -90,7 +90,7 @@ function loginPage( failed, bannerMode ) {
 </body></html>`;
 }
 
-function dashboardPage( noOrder ) {
+function dashboardPage( noOrder, sticky ) {
 	const dayTile = ( date ) => `
 		<div data-date="${ date }">
 			<div class="relative inline-block group">
@@ -120,14 +120,26 @@ function dashboardPage( noOrder ) {
 	</div>
 	<div id="sideBar"></div>
 	<script>
+		var STICKY = ${ JSON.stringify( Boolean( sticky ) ) };
 		var MENU = ${ JSON.stringify( MENU ) };
 		var DETAILS = ${ JSON.stringify( DETAILS ) };
 
+		var MONTHS = [ 'stycznia', 'lutego', 'marca', 'kwietnia', 'maja', 'czerwca',
+			'lipca', 'sierpnia', 'września', 'października', 'listopada', 'grudnia' ];
+
 		function render( date ) {
-			document.querySelectorAll( '.calendar-slider-items li.day' ).forEach( function ( li ) {
-				li.classList.remove( 'is-selected' );
-			} );
-			document.querySelector( '[data-date="' + date + '"] li.day' ).classList.add( 'is-selected' );
+			// STICKY = panel aktualizuje kartę dnia, ale NIE przesuwa is-selected.
+			// Tak zachowuje się prawdziwy panel i na tym wykładał się odczyt.
+			if ( ! STICKY ) {
+				document.querySelectorAll( '.calendar-slider-items li.day' ).forEach( function ( li ) {
+					li.classList.remove( 'is-selected' );
+				} );
+				document.querySelector( '[data-date="' + date + '"] li.day' ).classList.add( 'is-selected' );
+			}
+
+			var parts = date.split( '-' );
+			document.getElementById( 'day-details-date' ).textContent =
+				'Dzień, ' + Number( parts[ 2 ] ) + ' ' + MONTHS[ Number( parts[ 1 ] ) - 1 ];
 
 			var list = document.querySelector( '.dashboard-meals-list' );
 			list.innerHTML = '';
@@ -158,10 +170,18 @@ function dashboardPage( noOrder ) {
 			if ( 'Escape' === event.key ) { document.getElementById( 'sideBar' ).innerHTML = ''; }
 		} );
 
-		document.querySelectorAll( '.calendar-slider-items li.day:not(.is-disabled)' ).forEach( function ( li ) {
-			li.addEventListener( 'click', function () {
+		// Otwierac mozna kazdy dzien z etykieta - takze ten z klasa is-disabled,
+		// dokladnie jak w prawdziwym panelu. Uchwytem jest wewnetrzny role="button".
+		document.querySelectorAll( '.calendar-slider-items li.day' ).forEach( function ( li ) {
+			var date = li.closest( '[data-date]' ).getAttribute( 'data-date' );
+			var label = li.querySelector( '.day-label' );
+
+			if ( ! label || ! label.textContent.trim() ) {
+				return;
+			}
+
+			li.querySelector( '#calendar-day-' + date ).addEventListener( 'click', function () {
 				// Opoznienie jak w SPA - przelaczenie dnia nie jest natychmiastowe.
-				var date = li.closest( '[data-date]' ).getAttribute( 'data-date' );
 				setTimeout( function () { render( date ); }, 120 );
 			} );
 		} );
@@ -214,7 +234,7 @@ export function startFakePanel( options = {} ) {
 
 			res.writeHead( 200, { 'Content-Type': 'text/html; charset=utf-8' } );
 
-			return res.end( dashboardPage( Boolean( options.noOrder ) ) );
+			return res.end( dashboardPage( Boolean( options.noOrder ), Boolean( options.stickySelection ) ) );
 		}
 
 		res.writeHead( 404 );

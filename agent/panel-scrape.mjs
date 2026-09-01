@@ -186,3 +186,39 @@ export function extractSidebarDetails() {
 
 	return details;
 }
+
+/**
+ * Dzien i miesiac z naglowka karty dnia ("Środa, 2 września").
+ *
+ * Naglowek jest niezalezny od klas CSS, wiec sluzy jako drugi, pewniejszy
+ * dowod na to, ktory dzien panel faktycznie pokazuje.
+ *
+ * @returns {{day: number, month: number}|null}
+ */
+export function extractDayHeading() {
+	var node = document.querySelector( '#day-details-date' );
+
+	if ( ! node ) {
+		return null;
+	}
+
+	var months = [
+		'stycznia', 'lutego', 'marca', 'kwietnia', 'maja', 'czerwca',
+		'lipca', 'sierpnia', 'września', 'października', 'listopada', 'grudnia',
+	];
+
+	var text = node.textContent.toLowerCase();
+	var match = text.match( /(\d{1,2})\s+([a-ząćęłńóśźż]+)/ );
+
+	if ( ! match ) {
+		return null;
+	}
+
+	var month = months.indexOf( match[ 2 ] );
+
+	if ( -1 === month ) {
+		return null;
+	}
+
+	return { day: Number( match[ 1 ] ), month: month + 1 };
+}

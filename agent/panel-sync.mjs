@@ -18,7 +18,7 @@
 import { existsSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 
-import { extractDates, extractDay, extractSidebarDetails } from './panel-scrape.mjs';
+import { extractDates, extractDay, extractDayHeading, extractSidebarDetails } from './panel-scrape.mjs';
 
 const SELECTORS = {
 	user: '#username',
@@ -354,8 +354,17 @@ export async function collectDays( page, opts = {} ) {
 		const day = await page.evaluate( extractDay );
 
 		if ( day.date !== date ) {
-			log( `  ${ date }: panel pokazał ${ day.date }, pomijam.` );
-			continue;
+			// extractDay czyta date z klasy is-selected. Gdy panel jej nie
+			// przesuwa, rozstrzyga naglowek karty dnia.
+			const heading = await page.evaluate( extractDayHeading );
+			const [ , month, dayOfMonth ] = date.split( '-' ).map( Number );
+
+			if ( ! heading || heading.month !== month || heading.day !== dayOfMonth ) {
+				log( `  ${ date }: panel pokazał ${ day.date || 'nieznany dzień' }, pomijam.` );
+				continue;
+			}
+
+			day.date = date;
 		}
 
 		if ( 0 === day.meals.length ) {
@@ -378,24 +387,58 @@ export async function collectDays( page, opts = {} ) {
  * Klika w dzien i czeka, az karta dnia faktycznie go pokaze.
  */
 async function openDay( page, date ) {
-	const tile = page.locator( `[data-date="${ date }"] li.day` ).first();
+	// Kafelek niesie wlasciwy uchwyt kliniecia w srodku (role="button").
+	const targets = [
+		page.locator( `#calendar-day-${ date }` ).first(),
+		page.locator( `[data-date="${ date }"] li.day` ).first(),
+	];
 
-	if ( 0 === ( await tile.count() ) ) {
+	let clicked = false;
+
+	for ( const target of targets ) {
+		if ( 0 === ( await target.count().catch( () => 0 ) ) ) {
+			continue;
+		}
+
+		try {
+			await target.click( { timeout: 5000 } );
+			clicked = true;
+			break;
+		} catch {
+			// Sprobujemy nastepnego uchwytu.
+		}
+	}
+
+	if ( ! clicked ) {
 		return false;
 	}
 
-	// Klikamy kazdy dzien, ktory kalendarz w ogole pokazuje. O tym, czy dzien
-	// da sie otworzyc, rozstrzyga sprawdzenie ponizej - nie klasy CSS, bo
-	// is-disabled w tym panelu wystepuje takze na dniach z pelnym jadlospisem.
-	try {
-		await tile.click( { timeout: 5000 } );
-	} catch {
-		return false;
-	}
-
+	// Potwierdzenie na dwa sposoby: przeskok klasy is-selected ALBO naglowek
+	// karty dnia. Naglowek jest wazniejszy - nie zalezy od klas CSS, ktore
+	// panel moze zmienic.
 	try {
 		await page.waitForFunction(
 			( expected ) => {
+				var months = [
+					'stycznia', 'lutego', 'marca', 'kwietnia', 'maja', 'czerwca',
+					'lipca', 'sierpnia', 'września', 'października', 'listopada', 'grudnia',
+				];
+
+				var heading = document.querySelector( '#day-details-date' );
+
+				if ( heading ) {
+					var match = heading.textContent.toLowerCase().match( /(\d{1,2})\s+([a-ząćęłńóśźż]+)/ );
+
+					if ( match ) {
+						var month = months.indexOf( match[ 2 ] ) + 1;
+						var parts = expected.split( '-' );
+
+						if ( month === Number( parts[ 1 ] ) && Number( match[ 1 ] ) === Number( parts[ 2 ] ) ) {
+							return true;
+						}
+					}
+				}
+
 				var holders = document.querySelectorAll( '.calendar-slider-items [data-date]' );
 
 				for ( var i = 0; i < holders.length; i++ ) {
@@ -407,7 +450,7 @@ async function openDay( page, date ) {
 				return false;
 			},
 			date,
-			{ timeout: 4000 }
+			{ timeout: 8000 }
 		);
 	} catch {
 		return false;
