@@ -14,9 +14,10 @@ pojawia się przy obiedzie tego dnia, sam znika dzień później.
 | `agent/kv-events.mjs` | CLI do zarządzania wydarzeniami z terminala lub crona |
 | `agent/mcp-server.mjs` | Serwer MCP — asystent zarządza wydarzeniami sam, bez panelu |
 | `agent/sync-to-calendar.mjs` | Automat: logowanie do panelu → jadłospis → kalendarz + archiwum CSV |
+| `agent/sync-public-to-sheet.mjs` | Automat bez logowania: publiczna strona → jadłospis wszystkich diet → Arkusz Google |
 | `tests/` | Testy: logika dat w PHP, CLI i MCP na atrapie API |
 | `plugin/…/assets/panel-events.js` | Wstrzykiwacz wydarzeń do panelu klienta (przez GTM) |
-| `docs/` | [Instalacja](docs/INSTALACJA.md), [API](docs/API.md), [panel klienta](docs/PANEL-KLIENTA.md), [kalendarz](docs/KALENDARZ.md), [automat](docs/AUTOMAT.md), **[MacBook krok po kroku](docs/MACBOOK.md)** |
+| `docs/` | [Instalacja](docs/INSTALACJA.md), [API](docs/API.md), [panel klienta](docs/PANEL-KLIENTA.md), [kalendarz](docs/KALENDARZ.md), [Arkusz Google](docs/ARKUSZE.md), [automat](docs/AUTOMAT.md), **[MacBook krok po kroku](docs/MACBOOK.md)** |
 
 ## Jak to działa
 
@@ -98,6 +99,25 @@ dzień, który zniknął z panelu, zostaje w kalendarzu i w archiwum.
 Krok po kroku na Macu: **[docs/MACBOOK.md](docs/MACBOOK.md)**.
 Wariant serwerowy z Kalendarzem Google: [docs/AUTOMAT.md](docs/AUTOMAT.md).
 
+## Jadłospis w Arkuszu Google — bez logowania
+
+Panel klienta pokazuje jedną dietę: tę zamówioną. Publiczna strona pokazuje wszystkie,
+więc da się z niej zbudować pełny jadłospis **bez podawania jakichkolwiek haseł**:
+
+```bash
+npm run discover      # czy strona w ogóle udostępnia jadłospis bez logowania
+npm run sheet:create  # zakłada arkusz i wypisuje linię do agent/.env
+npm run sheet:dry     # próba na sucho
+npm run sheet         # zapis do arkusza
+```
+
+Jeden wiersz to jeden posiłek jednego dnia jednej diety — z kaloriami, makroskładnikami,
+składem i alergenami. **Nic nie znika**: kolejne uruchomienia dopisują i poprawiają, ale
+nigdy nie kasują wierszy, także tych dopisanych ręcznie. Codziennie samo:
+`npm run autostart -- 7 30 sheet`.
+
+Konfiguracja dostępu i co robić, gdy strona nie oddaje danych: [docs/ARKUSZE.md](docs/ARKUSZE.md).
+
 ## Dwa miejsca, dwie drogi
 
 Jadłospis żyje w dwóch niezależnych systemach i każdy wymaga czego innego:
@@ -117,8 +137,9 @@ npm install      # jednorazowo, dla jsdom
 bash tests/run.sh
 ```
 
-294 asercje: logika dopasowania dat i kanał iCal w czystym PHP, CLI i serwer MCP na
+421 asercji: logika dopasowania dat i kanał iCal w czystym PHP, CLI i serwer MCP na
 atrapie API, odczyt jadłospisu i wstrzykiwacz na fragmencie prawdziwego HTML-a panelu,
-planowanie synchronizacji kalendarza, archiwum CSV oraz pełne logowanie z ponownym
-użyciem sesji — w prawdziwym Chromium na atrapie panelu. Bez stawiania WordPressa,
-bez sieci zewnętrznej, bez konta Google i bez macOS.
+planowanie synchronizacji kalendarza, archiwum CSV, odczyt publicznego jadłospisu na
+atrapie WordPressa, zapis do Arkuszy Google na atrapie API oraz pełne logowanie
+z ponownym użyciem sesji — w prawdziwym Chromium na atrapie panelu. Bez stawiania
+WordPressa, bez sieci zewnętrznej, bez konta Google i bez macOS.

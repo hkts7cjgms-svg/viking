@@ -71,6 +71,7 @@ const wednesday = day( '2026-09-02', [
 	same( 2, rows.length, 'każdy posiłek to osobny wiersz' );
 	same( '2026-09-02', rows[ 0 ].data, 'wiersz niesie datę' );
 	same( 'sniadanie', rows[ 0 ].posilek, 'wiersz niesie slug posiłku' );
+	same( '', rows[ 0 ].dieta, 'panel klienta ma jedną dietę, więc kolumna zostaje pusta' );
 	same( '479', rows[ 0 ].kcal, 'wiersz niesie kalorie' );
 	same( '2026-09-01T08:00:00Z', rows[ 0 ].zaktualizowano, 'wiersz niesie znacznik czasu' );
 }
@@ -176,7 +177,7 @@ same( 0, parseCsv( `${ COLUMNS.join( ',' ) }\n` ).length, 'sam nagłówek daje p
 	// Plik dopisany recznie nie moze zostac zgubiony.
 	writeFileSync(
 		path,
-		`${ readFileSync( path, 'utf8' ) }2026-07-01,obiad,Obiad,Notatka ręczna,,,,,,,2026-07-01T00:00:00Z\n`,
+		`${ readFileSync( path, 'utf8' ) }2026-07-01,,obiad,Obiad,Notatka ręczna,,,,,,,2026-07-01T00:00:00Z\n`,
 		'utf8'
 	);
 
@@ -185,6 +186,30 @@ same( 0, parseCsv( `${ COLUMNS.join( ',' ) }\n` ).length, 'sam nagłówek daje p
 	same( 4, third.after, 'ręcznie dopisany wiersz przetrwał kolejną synchronizację' );
 
 	rmSync( dir, { recursive: true, force: true } );
+}
+
+// --- wiele diet w jednym archiwum ---------------------------------------
+{
+	const smart = { ...day( '2026-09-02', [ [ 'obiad', 'Obiad', 'Pierogi', [] ] ] ), diet: 'Smart 1500' };
+	const sport = { ...day( '2026-09-02', [ [ 'obiad', 'Obiad', 'Kurczak z ryżem', [] ] ] ), diet: 'Sport 2500' };
+	const rows = toRows( [ smart, sport ], '2026-09-01T08:00:00Z' );
+
+	same( 2, rows.length, 'ten sam obiad w dwóch dietach to dwa wiersze' );
+	same( 'Smart 1500', rows[ 0 ].dieta, 'wiersz niesie nazwę diety' );
+
+	const merged = mergeRows( rows, toRows( [ smart ], '2026-09-03T08:00:00Z' ) );
+
+	same( 2, merged.length, 'ponowny odczyt jednej diety nie kasuje drugiej' );
+	same(
+		'Kurczak z ryżem',
+		merged.find( ( row ) => 'Sport 2500' === row.dieta ).opis,
+		'druga dieta zostaje nietknięta'
+	);
+	same(
+		'2026-09-01T08:00:00Z',
+		merged.find( ( row ) => 'Smart 1500' === row.dieta ).zaktualizowano,
+		'niezmieniony posiłek zachowuje stary znacznik czasu'
+	);
 }
 
 if ( failures.length === 0 ) {

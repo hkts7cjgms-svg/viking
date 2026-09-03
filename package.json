@@ -8,7 +8,11 @@
     "sync": "node agent/sync-to-calendar.mjs",
     "sync:dry": "node agent/sync-to-calendar.mjs --dry-run",
     "diagnose": "node agent/diagnose.mjs",
-    "autostart": "bash agent/install-autostart.sh"
+    "autostart": "bash agent/install-autostart.sh",
+    "discover": "node agent/discover-public-menu.mjs",
+    "sheet": "node agent/sync-public-to-sheet.mjs",
+    "sheet:dry": "node agent/sync-public-to-sheet.mjs --dry-run",
+    "sheet:create": "node agent/sync-public-to-sheet.mjs --create"
   },
   "devDependencies": {
     "jsdom": "^30.0.1"

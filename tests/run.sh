@@ -61,5 +61,13 @@ echo "== archiwum jadlospisu =="
 node tests/archive.test.mjs
 
 echo
+echo "== publiczny jadlospis (atrapa WordPressa) =="
+node tests/public-menu.test.mjs
+
+echo
+echo "== zapis do Arkuszy Google (atrapa API) =="
+node tests/sheets.test.mjs
+
+echo
 echo "== logowanie do panelu (prawdziwa przegladarka, atrapa panelu) =="
 node tests/panel-login.test.mjs

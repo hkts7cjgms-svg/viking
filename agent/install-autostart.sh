@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # Ustawia codzienne uruchamianie synchronizacji na macOS (launchd).
 #
-#   npm run autostart          # codziennie o 7:30
-#   npm run autostart -- 6 45  # codziennie o 6:45
+#   npm run autostart                # panel -> kalendarz, codziennie o 7:30
+#   npm run autostart -- 6 45        # to samo o 6:45
+#   npm run autostart -- 7 30 sheet  # publiczny jadlospis -> Arkusz Google
 #
+# Oba zadania moga dzialac obok siebie - maja osobne wpisy i osobne logi.
 # Sciezki wykrywa sam - nie ma czego podmieniac recznie.
 set -euo pipefail
 
@@ -14,10 +16,27 @@ fi
 
 HOUR="${1:-7}"
 MINUTE="${2:-30}"
+JOB="${3:-sync}"
+
+case "$JOB" in
+	sync)
+		SCRIPT="agent/sync-to-calendar.mjs"
+		LABEL="pl.kuchniavikinga.sync"
+		LOG="sync.log"
+		;;
+	sheet)
+		SCRIPT="agent/sync-public-to-sheet.mjs"
+		LABEL="pl.kuchniavikinga.sheet"
+		LOG="sheet.log"
+		;;
+	*)
+		echo "Nieznane zadanie: $JOB. Użyj \"sync\" (kalendarz) albo \"sheet\" (Arkusz Google)." >&2
+		exit 1
+		;;
+esac
 
 PROJECT="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
 NODE="$( command -v node )"
-LABEL="pl.kuchniavikinga.sync"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 
 if [[ -z "$NODE" ]]; then
@@ -44,7 +63,7 @@ cat > "$PLIST" <<PLIST_END
 	<key>ProgramArguments</key>
 	<array>
 		<string>$NODE</string>
-		<string>agent/sync-to-calendar.mjs</string>
+		<string>$SCRIPT</string>
 	</array>
 	<key>WorkingDirectory</key><string>$PROJECT</string>
 	<key>EnvironmentVariables</key>
@@ -56,8 +75,8 @@ cat > "$PLIST" <<PLIST_END
 		<key>Hour</key><integer>$HOUR</integer>
 		<key>Minute</key><integer>$MINUTE</integer>
 	</dict>
-	<key>StandardOutPath</key><string>$PROJECT/sync.log</string>
-	<key>StandardErrorPath</key><string>$PROJECT/sync.log</string>
+	<key>StandardOutPath</key><string>$PROJECT/$LOG</string>
+	<key>StandardErrorPath</key><string>$PROJECT/$LOG</string>
 </dict>
 </plist>
 PLIST_END
@@ -67,12 +86,12 @@ plutil -lint "$PLIST" > /dev/null
 
 launchctl load "$PLIST"
 
-printf 'Gotowe. Synchronizacja będzie się uruchamiać codziennie o %02d:%02d.\n' "$HOUR" "$MINUTE"
+printf 'Gotowe. %s będzie się uruchamiać codziennie o %02d:%02d.\n' "$SCRIPT" "$HOUR" "$MINUTE"
 echo
 echo "  Projekt:  $PROJECT"
 echo "  Node:     $NODE"
-echo "  Log:      $PROJECT/sync.log"
+echo "  Log:      $PROJECT/$LOG"
 echo
 echo "Uruchom teraz, nie czekając do rana:  launchctl start $LABEL"
-echo "Podgląd działania:                    tail -f $PROJECT/sync.log"
+echo "Podgląd działania:                    tail -f $PROJECT/$LOG"
 echo "Wyłączenie:                           launchctl unload $PLIST"

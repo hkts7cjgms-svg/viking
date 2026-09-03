@@ -11,6 +11,7 @@ import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 
 export const COLUMNS = [
 	'data',
+	'dieta',
 	'posilek',
 	'nazwa',
 	'opis',
@@ -79,6 +80,8 @@ export function toRows( days, now = new Date().toISOString() ) {
 
 			rows.push( {
 				data: day.date,
+				// Publiczna strona ma wiele diet; panel klienta tylko jedna - stad puste.
+				dieta: day.diet || '',
 				posilek: meal.slug || '',
 				nazwa: meal.name || '',
 				opis: meal.description || '',
@@ -96,9 +99,9 @@ export function toRows( days, now = new Date().toISOString() ) {
 	return rows;
 }
 
-/** Klucz wiersza: jeden posilek danego dnia. */
+/** Klucz wiersza: jeden posilek danego dnia w danej diecie. */
 function rowKey( row ) {
-	return `${ row.data }|${ row.posilek }`;
+	return `${ row.data }|${ row.dieta ?? '' }|${ row.posilek }`;
 }
 
 /**
@@ -130,7 +133,13 @@ export function mergeRows( existing, incoming ) {
 	return [ ...merged.values() ].sort( ( a, b ) => {
 		const byDate = String( a.data ).localeCompare( String( b.data ) );
 
-		return 0 !== byDate ? byDate : String( a.posilek ).localeCompare( String( b.posilek ) );
+		if ( 0 !== byDate ) {
+			return byDate;
+		}
+
+		const byDiet = String( a.dieta ?? '' ).localeCompare( String( b.dieta ?? '' ) );
+
+		return 0 !== byDiet ? byDiet : String( a.posilek ).localeCompare( String( b.posilek ) );
 	} );
 }
 

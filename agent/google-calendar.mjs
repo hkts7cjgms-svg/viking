@@ -34,12 +34,12 @@ function base64url( input ) {
 /**
  * Podpisany JWT dla konta uslugowego. Google wymienia go na token dostepu.
  */
-function signServiceAccountJwt( { email, privateKey, subject } ) {
+function signServiceAccountJwt( { email, privateKey, subject, scope = SCOPE } ) {
 	const now = Math.floor( Date.now() / 1000 );
 	const header = base64url( JSON.stringify( { alg: 'RS256', typ: 'JWT' } ) );
 	const claims = {
 		iss: email,
-		scope: SCOPE,
+		scope,
 		aud: TOKEN_URL,
 		iat: now,
 		exp: now + 3600,
@@ -61,13 +61,24 @@ function signServiceAccountJwt( { email, privateKey, subject } ) {
 	return `${ header }.${ payload }.${ base64url( signature ) }`;
 }
 
-export function createClient( config ) {
-	const calendarId = config.calendarId || 'primary';
+/**
+ * Zrodlo tokenu dostepu - wspolne dla Kalendarza i Arkuszy.
+ *
+ * @param {object} config Dane uwierzytelniajace.
+ * @param {string} scope  Zakres uprawnien; domyslnie wydarzenia kalendarza.
+ *
+ * @returns {() => Promise<string>} Funkcja oddajaca wazny token.
+ */
+export function createTokenSource( config, scope = SCOPE ) {
 	let token = null;
-	let tokenExpiresAt = 0;
+	let expiresAt = 0;
 	const fetchImpl = config.fetch || globalThis.fetch;
 
-	async function requestToken() {
+	return async function accessToken() {
+		if ( token && Date.now() < expiresAt ) {
+			return token;
+		}
+
 		let body;
 
 		if ( config.refreshToken ) {
@@ -84,10 +95,11 @@ export function createClient( config ) {
 					email: config.serviceAccountEmail,
 					privateKey: config.privateKey,
 					subject: config.subject,
+					scope,
 				} ),
 			} );
 		} else {
-			throw new GoogleCalendarError( 0, 'Brak danych uwierzytelniających do Kalendarza Google.' );
+			throw new GoogleCalendarError( 0, 'Brak danych uwierzytelniających do konta Google.' );
 		}
 
 		const response = await fetchImpl( TOKEN_URL, {
@@ -106,15 +118,19 @@ export function createClient( config ) {
 		}
 
 		token = data.access_token;
-		// Margines, żeby token nie wygasł w trakcie serii zapytań.
-		tokenExpiresAt = Date.now() + ( data.expires_in - 60 ) * 1000;
-	}
+		// Margines, zeby token nie wygasl w trakcie serii zapytan.
+		expiresAt = Date.now() + ( data.expires_in - 60 ) * 1000;
+
+		return token;
+	};
+}
+
+export function createClient( config ) {
+	const calendarId = config.calendarId || 'primary';
+	const accessToken = createTokenSource( config );
+	const fetchImpl = config.fetch || globalThis.fetch;
 
 	async function authorized( path, options = {} ) {
-		if ( ! token || Date.now() >= tokenExpiresAt ) {
-			await requestToken();
-		}
-
 		const url = new URL( `${ API }${ path }` );
 
 		for ( const [ key, value ] of Object.entries( options.query || {} ) ) {
@@ -126,7 +142,7 @@ export function createClient( config ) {
 		const response = await fetchImpl( url.toString(), {
 			method: options.method || 'GET',
 			headers: {
-				Authorization: `Bearer ${ token }`,
+				Authorization: `Bearer ${ await accessToken() }`,
 				'Content-Type': 'application/json',
 			},
 			body: options.body ? JSON.stringify( options.body ) : undefined,

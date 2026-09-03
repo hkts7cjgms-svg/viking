@@ -223,6 +223,27 @@ export function extractSidebarDetails() {
 		}
 	}
 
+	// Zapasowo: naglowek i to, co pod nim. Panel bywa przebudowywany, a taki
+	// uklad ("Sklad" / lista) przezywa zwykle kazda zmiane klas CSS.
+	if ( 0 === Object.keys( details ).length ) {
+		var headings = box.querySelectorAll( 'h1, h2, h3, h4, dt' );
+
+		for ( var h = 0; h < headings.length; h++ ) {
+			var label = clean( headings[ h ].textContent ).replace( /:$/, '' );
+			var next = headings[ h ].nextElementSibling;
+
+			if ( ! label || label.length > 30 || ! next ) {
+				continue;
+			}
+
+			var content = clean( next.textContent );
+
+			if ( content ) {
+				details[ label ] = content;
+			}
+		}
+	}
+
 	// Gdy nic nie rozpoznano, oddajemy surowy tekst - lepsze niz nic.
 	if ( 0 === Object.keys( details ).length ) {
 		var raw = clean( box.textContent );
