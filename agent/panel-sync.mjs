@@ -26,6 +26,19 @@ import {
 	extractSidebarDetails,
 } from './panel-scrape.mjs';
 
+/**
+ * Strzalka "nastepny miesiac". Pierwszy selektor to ten z panelu, reszta to
+ * zapas na wypadek przebudowy - bez niej przelom miesiaca gubi dni. Diagnostyka
+ * sprawdza dokladnie te liste, wiec nie ma dwoch wersji prawdy.
+ */
+export const NEXT_MONTH_SELECTORS = [
+	'#calendar-next-month',
+	'[id*="next-month"]',
+	'[aria-label*="astęp" i]',
+	'[aria-label*="next" i]',
+	'.calendar-header [role="button"]:last-of-type',
+];
+
 const SELECTORS = {
 	user: '#username',
 	password: '#password',
@@ -38,7 +51,7 @@ const SELECTORS = {
 	calendar: '.calendar-slider-items',
 	// Okno szczegolow posilku - najpewniejszy punkt zaczepienia to lista skladnikow.
 	details: '.details-ingredients, #sideBar',
-	nextMonth: '#calendar-next-month',
+	nextMonth: NEXT_MONTH_SELECTORS,
 	monthLabel: '#calendar-current-month',
 	loginForm: '#username',
 };
@@ -380,33 +393,67 @@ async function waitForAnyMeals( page, timeout ) {
  */
 async function goToNextMonth( page, log ) {
 	const before = await page.evaluate( extractMonthLabel );
-	const arrow = page.locator( SELECTORS.nextMonth ).first();
+	const dates = await page.evaluate( extractDates );
+	let arrow = null;
 
-	if ( 0 === ( await arrow.count().catch( () => 0 ) ) ) {
+	for ( const selector of SELECTORS.nextMonth ) {
+		const candidate = page.locator( selector ).first();
+
+		if ( await candidate.count().catch( () => 0 ) ) {
+			arrow = candidate;
+			break;
+		}
+	}
+
+	if ( ! arrow ) {
+		log( 'Nie znalazłem strzałki następnego miesiąca — dni z kolejnego miesiąca zostaną pominięte.' );
+		log( 'Uruchom `npm run diagnose` — wypisze, co panel pokazuje obok podpisu miesiąca.' );
+
 		return false;
 	}
 
 	await arrow.click( { timeout: 3000 } ).catch( () => {} );
 	await arrow.dispatchEvent( 'click' ).catch( () => {} );
 
+	// Podpis miesiaca bywa jedynym, co sie zmienia, ale sam kalendarz tez
+	// wystarczy - niektore panele przewijaja dni bez ruszania naglowka.
 	try {
 		await page.waitForFunction(
-			( previous ) => {
+			( [ previousLabel, previousFirst ] ) => {
 				var node = document.querySelector( '#calendar-current-month' );
+				var label = node ? node.textContent.replace( /\s+/g, ' ' ).trim() : '';
+				var first = document.querySelector( '.calendar-slider-items [data-date]' );
+				var date = first ? first.getAttribute( 'data-date' ) : '';
 
-				return Boolean( node ) && node.textContent.replace( /\s+/g, ' ' ).trim() !== previous;
+				return ( label && label !== previousLabel ) || ( date && date !== previousFirst );
 			},
-			before,
+			[ before, ( dates.dates || [] )[ 0 ] || '' ],
 			{ timeout: 8000 }
 		);
 	} catch {
+		log( 'Kliknąłem strzałkę, ale kalendarz się nie przestawił — zostaję w tym miesiącu.' );
+
 		return false;
 	}
 
-	log( `Przechodzę do następnego miesiąca: ${ await page.evaluate( extractMonthLabel ) }` );
+	log( `Przechodzę do następnego miesiąca: ${ ( await page.evaluate( extractMonthLabel ) ) || '(bez podpisu)' }` );
 	await page.waitForTimeout( 500 );
 
 	return true;
+}
+
+/** Dzisiejsza data w zapisie RRRR-MM-DD. */
+function today() {
+	return new Date().toISOString().slice( 0, 10 );
+}
+
+/** Data przesunieta o podana liczbe dni, w zapisie RRRR-MM-DD. */
+function addDays( date, days ) {
+	const parsed = new Date( `${ date }T00:00:00Z` );
+
+	parsed.setUTCDate( parsed.getUTCDate() + days );
+
+	return parsed.toISOString().slice( 0, 10 );
 }
 
 /**
@@ -537,12 +584,34 @@ export async function collectDays( page, opts = {} ) {
 			}
 		}
 
-		// Jadlospis siega poza biezacy miesiac tylko wtedy, gdy zamowienie trwa
-		// do jego konca - inaczej nie ma po co przewijac kalendarza dalej.
-		const last = all[ all.length - 1 ];
-		const continues = last && ( '' !== last.label || last.isActive );
+		// Pusty miesiac konczy przegladanie - dalej jest juz tylko pusto.
+		if ( 0 === wanted.length && 0 < month ) {
+			log( 'W tym miesiącu nie ma już nic do pobrania — kończę.' );
+			break;
+		}
 
-		if ( ! continues || ( opts.to && last.date >= opts.to ) ) {
+		const last = all[ all.length - 1 ];
+
+		if ( ! last ) {
+			break;
+		}
+
+		if ( opts.to && last.date >= opts.to ) {
+			break;
+		}
+
+		// O przejsciu dalej decyduje ZASIEG jadlospisu, a nie etykieta ostatniego
+		// kafelka. Dni bez zamowienia etykiety nie maja, wiec poprzedni warunek
+		// zatrzymywal sie na koncu miesiaca nawet wtedy, gdy panel mial juz
+		// opublikowane menu na pierwsze dni kolejnego.
+		// Okno liczymy od DZIS, nie od poczatku zakresu: panel publikuje jadlospis
+		// mniej wiecej dwa tygodnie do przodu wzgledem dnia dzisiejszego, a --from
+		// bywa data z przeszlosci.
+		const horizon = addDays( opts.today || today(), opts.menuWindow ?? 15 );
+		const lastCarriesMenu = '' !== last.label || last.isActive;
+
+		if ( ! lastCarriesMenu && last.date >= horizon ) {
+			log( `Jadłospis nie sięga poza ${ last.date } — nie przewijam kalendarza dalej.` );
 			break;
 		}
 

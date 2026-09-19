@@ -162,6 +162,9 @@ async function main() {
 				mealsTimeout: Number( process.env.KV_MEALS_TIMEOUT || 15000 ),
 				// Ile czekac na okno ze skladnikami po klinieciu w danie.
 				detailsTimeout: Number( process.env.KV_DETAILS_TIMEOUT || 10000 ),
+				// Na ile dni do przodu panel publikuje jadlospis. Po tym poznajemy,
+				// czy trzeba przewinac kalendarz na kolejny miesiac.
+				menuWindow: Number( process.env.KV_MENU_WINDOW || 15 ),
 			} )
 	);
 

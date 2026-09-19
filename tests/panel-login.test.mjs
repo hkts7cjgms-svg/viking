@@ -354,6 +354,78 @@ const sessionPath = join( dir, 'session.json' );
 	);
 }
 
+// --- koniec miesiaca bez etykiet -----------------------------------------
+// Tak wyglada prawdziwy panel: ostatnie dni miesiaca nie maja etykiety, bo nie
+// obejmuje ich zamowienie. Wczesniej wlasnie to zatrzymywalo przewijanie i dni
+// z poczatku kolejnego miesiaca przepadaly, choc panel mial juz dla nich menu.
+{
+	const quiet = await startFakePanel( { quietMonthEnd: true } );
+	const notes = [];
+
+	try {
+		const days = await withPanel(
+			{ panelUrl: quiet.url, user: credentials.user, password: credentials.password, timeout: 20000 },
+			( page ) =>
+				collectDays( page, {
+					// 15-dniowe okno jadlospisu siega juz pazdziernika.
+					today: '2026-09-20',
+					from: '2026-09-20',
+					details: false,
+					mealsTimeout: 3000,
+					log: ( message ) => notes.push( message ),
+				} )
+		);
+
+		ok(
+			days.some( ( day ) => '2026-10-01' === day.date ),
+			'dzień z kolejnego miesiąca jest pobierany mimo końca miesiąca bez etykiet'
+		);
+		ok(
+			notes.some( ( note ) => note.includes( 'następnego miesiąca' ) ),
+			'log mówi wprost, że kalendarz został przewinięty'
+		);
+	} catch ( error ) {
+		failures.push( `koniec miesiąca bez etykiet zablokował odczyt: ${ error.message }` );
+	} finally {
+		quiet.server.close();
+	}
+}
+
+// --- jadlospis konczacy sie w tym miesiacu -------------------------------
+// Odwrotny przypadek: okno jadlospisu nie siega kolejnego miesiaca, wiec
+// przewijanie byloby tylko strata czasu - ale powod ma byc widoczny w logu.
+{
+	const quiet = await startFakePanel( { quietMonthEnd: true } );
+	const notes = [];
+
+	try {
+		await withPanel(
+			{ panelUrl: quiet.url, user: credentials.user, password: credentials.password, timeout: 20000 },
+			( page ) =>
+				collectDays( page, {
+					today: '2026-09-01',
+					from: '2026-09-01',
+					details: false,
+					mealsTimeout: 3000,
+					log: ( message ) => notes.push( message ),
+				} )
+		);
+
+		ok(
+			notes.some( ( note ) => note.includes( 'nie sięga poza' ) ),
+			'log tłumaczy, dlaczego kalendarz nie został przewinięty'
+		);
+		ok(
+			! notes.some( ( note ) => note.includes( 'następnego miesiąca' ) ),
+			'bez potrzeby nie klikamy w następny miesiąc'
+		);
+	} catch ( error ) {
+		failures.push( `jadłospis kończący się w tym miesiącu zablokował odczyt: ${ error.message }` );
+	} finally {
+		quiet.server.close();
+	}
+}
+
 // --- konto bez aktywnego zamowienia -------------------------------------
 // Pulpit jest, kalendarza nie ma. To NIE jest bląd logowania - ma się skończyć
 // pustą listą i zrozumiałym komunikatem, a nie wyjątkiem.

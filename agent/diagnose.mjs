@@ -12,7 +12,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { extractDates, extractDay, extractSidebarDetails } from './panel-scrape.mjs';
+import { extractDates, extractDay, extractMonthLabel, extractSidebarDetails } from './panel-scrape.mjs';
 
 const HERE = dirname( fileURLToPath( import.meta.url ) );
 
@@ -49,7 +49,9 @@ if ( ! panelUrl || ! process.env.KV_PANEL_USER || ! process.env.KV_PANEL_PASSWOR
 	process.exit( 1 );
 }
 
-const { withPanel } = await import( './panel-sync.mjs' );
+// Punkty zaczepienia bierzemy z synchronizacji - diagnostyka ma sprawdzac to,
+// czego naprawde uzywa odczyt, a nie wlasna kopie listy.
+const { withPanel, NEXT_MONTH_SELECTORS: NEXT_MONTH } = await import( './panel-sync.mjs' );
 const shot = join( process.cwd(), 'panel.png' );
 
 async function report( page ) {
@@ -103,6 +105,60 @@ async function report( page ) {
 
 		log( text.replace( /\n{3,}/g, '\n\n' ).trim().slice( 0, 1200 ) || '(strona jest pusta)' );
 		log( '───────────────────────────────────────────────────────' );
+	}
+
+	// Przelom miesiaca: bez dzialajacej strzalki gina dni z poczatku kolejnego
+	// miesiaca, a widac to dopiero po tym, ze ich po prostu nie ma.
+	log();
+	log( 'Przejście na następny miesiąc:' );
+
+	const monthLabel = await page.evaluate( extractMonthLabel ).catch( () => '' );
+
+	log( `  podpis miesiąca: ${ monthLabel || '(nie znalazłem #calendar-current-month)' }` );
+
+	let arrowFound = '';
+
+	for ( const selector of NEXT_MONTH ) {
+		const count = await page.locator( selector ).count().catch( () => 0 );
+
+		log( `  ${ count ? '✓' : '·' } ${ selector }` );
+
+		if ( count && ! arrowFound ) {
+			arrowFound = selector;
+		}
+	}
+
+	if ( ! arrowFound ) {
+		log( '  Żaden selektor nie pasuje. Oto co stoi obok podpisu miesiąca:' );
+
+		const around = await page
+			.evaluate( () => {
+				var node = document.querySelector( '#calendar-current-month' );
+				var box = node ? node.parentElement : document.querySelector( '.calendar-slider' );
+
+				return box ? box.outerHTML.slice( 0, 900 ) : '(nie ma czego pokazać)';
+			} )
+			.catch( () => '(nie udało się odczytać)' );
+
+		log( `  ${ around }` );
+	} else {
+		await page.locator( arrowFound ).first().click( { timeout: 3000 } ).catch( () => {} );
+		await page.waitForTimeout( 1200 );
+
+		const after = await page.evaluate( extractMonthLabel ).catch( () => '' );
+		const next = await page.evaluate( extractDates ).catch( () => null );
+
+		log( `  po kliknięciu: ${ after || '(bez podpisu)' }, dni w kalendarzu: ${ next ? next.days.length : 0 }` );
+
+		if ( next && next.days.length ) {
+			const withMenu = next.days.filter( ( day ) => '' !== day.label || day.isActive );
+
+			log( `  z jadłospisem: ${ withMenu.length }${ withMenu.length ? ` (od ${ withMenu[ 0 ].date })` : '' }` );
+		}
+
+		if ( after === monthLabel ) {
+			log( '  Podpis się nie zmienił — kliknięcie nie przestawiło kalendarza.' );
+		}
 	}
 
 	const current = await page.evaluate( extractDay ).catch( () => null );

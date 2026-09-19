@@ -23,6 +23,10 @@ const DISABLED = [ '2026-09-01', '2026-09-02', '2026-09-03' ];
 const LABELS = { '2026-09-02': 'Zobacz', '2026-09-04': 'Edytuj', '2026-10-01': 'Edytuj' };
 const DATES = [ '2026-09-01', '2026-09-02', '2026-09-03', '2026-09-04' ];
 
+// Prawdziwy panel konczy miesiac dniami bez zamowienia: bez etykiety i bez
+// klasy is-active. Mimo to nastepny miesiac ma juz opublikowane menu.
+const QUIET_END_DATES = [ ...DATES, '2026-09-30' ];
+
 // Drugi miesiac - kalendarz pokazuje jeden naraz, a jadlospis potrafi siegac dalej.
 const NEXT_DATES = [ '2026-10-01', '2026-10-02' ];
 
@@ -100,7 +104,8 @@ function loginPage( failed, bannerMode ) {
 </body></html>`;
 }
 
-function dashboardPage( noOrder, sticky, blockPointer, flaky, narrow ) {
+function dashboardPage( noOrder, sticky, blockPointer, flaky, narrow, quietEnd ) {
+	const dates = quietEnd ? QUIET_END_DATES : DATES;
 	const dayTile = ( date ) => `
 		<div data-date="${ date }">
 			<div class="relative inline-block group">
@@ -132,7 +137,7 @@ function dashboardPage( noOrder, sticky, blockPointer, flaky, narrow ) {
 		<span id="calendar-next-month" role="button" tabindex="0">→</span>
 	</div>
 	<div class="calendar-slider" style="${ narrow ? 'width:160px;overflow-x:auto;white-space:nowrap' : '' }">
-		<div class="calendar-slider-items" style="${ narrow ? 'display:inline-flex;width:max-content' : '' }">${ DATES.map( dayTile ).join( '' ) }</div>
+		<div class="calendar-slider-items" style="${ narrow ? 'display:inline-flex;width:max-content' : '' }">${ dates.map( dayTile ).join( '' ) }</div>
 	</div>
 	<div id="dayDetailsCard"><div class="card-header"><h3 id="day-details-date"></h3></div>
 		<div class="card-body"><ul class="dashboard-meals-list"></ul></div>
@@ -334,7 +339,16 @@ export function startFakePanel( options = {} ) {
 
 			res.writeHead( 200, { 'Content-Type': 'text/html; charset=utf-8' } );
 
-			return res.end( dashboardPage( Boolean( options.noOrder ), Boolean( options.stickySelection ), Boolean( options.blockPointer ), Boolean( options.flakyMeals ), Boolean( options.narrowCalendar ) ) );
+			return res.end(
+				dashboardPage(
+					Boolean( options.noOrder ),
+					Boolean( options.stickySelection ),
+					Boolean( options.blockPointer ),
+					Boolean( options.flakyMeals ),
+					Boolean( options.narrowCalendar ),
+					Boolean( options.quietMonthEnd )
+				)
+			);
 		}
 
 		res.writeHead( 404 );
