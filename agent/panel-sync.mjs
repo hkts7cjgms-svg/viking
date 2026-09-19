@@ -532,6 +532,12 @@ export async function collectDays( page, opts = {} ) {
 	const processed = new Set();
 	const maxMonths = opts.maxMonths || 3;
 
+	// Dokad siega jadlospis. Panel publikuje menu mniej wiecej dwa tygodnie do
+	// przodu wzgledem DZIS - nie wzgledem --from, ktore bywa data z przeszlosci.
+	const horizon = opts.to || addDays( opts.today || today(), opts.menuWindow ?? 15 );
+
+	log( `Sprawdzam dni od ${ opts.from || opts.today || today() } do ${ horizon }.` );
+
 	for ( let month = 0; month < maxMonths; month++ ) {
 		const calendar = await page.evaluate( extractDates );
 		const all = calendar.days || [];
@@ -553,20 +559,16 @@ export async function collectDays( page, opts = {} ) {
 			return ! ( opts.to && day.date > opts.to );
 		} );
 
-		// Dzien "ma co pokazac", gdy niesie etykietę (Zobacz / Edytuj) albo jest
-		// aktywny. Klasa is-disabled NIE dyskwalifikuje - w tym panelu znaczy
-		// tylko tyle, że zamówienia na ten dzień nie da się już zmienić.
-		let wanted = inRange.filter( ( day ) => '' !== day.label || day.isActive );
-
-		if ( 0 === wanted.length && inRange.length && 0 === month ) {
-			// Panel mógł zmienić wygląd - lepiej spróbować wszystkich niż nic nie pobrać.
-			log( 'Żaden dzień nie ma etykiety — próbuję otworzyć wszystkie dni z zakresu.' );
-			wanted = inRange;
-		}
+		// Otwieramy KAZDY dzien z okna jadlospisu, a nie tylko te z etykietą.
+		// Etykieta "Zobacz"/"Edytuj" znaczy tylko tyle, że na ten dzień jest
+		// zamówiona dostawa - menu panel pokazuje także dla pozostałych dni.
+		const wanted = inRange.filter( ( day ) => day.date <= horizon );
+		const labelled = wanted.filter( ( day ) => '' !== day.label || day.isActive ).length;
 
 		log(
 			`${ await page.evaluate( extractMonthLabel ) || 'Kalendarz' }: ` +
-				`${ all.length } dni, w zakresie ${ inRange.length }, do sprawdzenia ${ wanted.length }.`
+				`${ all.length } dni, w zakresie ${ inRange.length }, do sprawdzenia ${ wanted.length }` +
+				`${ labelled ? ` (z zamówieniem: ${ labelled })` : '' }.`
 		);
 
 		for ( const { date } of wanted ) {
@@ -596,22 +598,12 @@ export async function collectDays( page, opts = {} ) {
 			break;
 		}
 
-		if ( opts.to && last.date >= opts.to ) {
-			break;
-		}
-
 		// O przejsciu dalej decyduje ZASIEG jadlospisu, a nie etykieta ostatniego
 		// kafelka. Dni bez zamowienia etykiety nie maja, wiec poprzedni warunek
 		// zatrzymywal sie na koncu miesiaca nawet wtedy, gdy panel mial juz
 		// opublikowane menu na pierwsze dni kolejnego.
-		// Okno liczymy od DZIS, nie od poczatku zakresu: panel publikuje jadlospis
-		// mniej wiecej dwa tygodnie do przodu wzgledem dnia dzisiejszego, a --from
-		// bywa data z przeszlosci.
-		const horizon = addDays( opts.today || today(), opts.menuWindow ?? 15 );
-		const lastCarriesMenu = '' !== last.label || last.isActive;
-
-		if ( ! lastCarriesMenu && last.date >= horizon ) {
-			log( `Jadłospis nie sięga poza ${ last.date } — nie przewijam kalendarza dalej.` );
+		if ( last.date >= horizon ) {
+			log( `Okno jadłospisu kończy się na ${ horizon } — nie przewijam kalendarza dalej.` );
 			break;
 		}
 
@@ -641,7 +633,7 @@ async function collectSingleDay( page, date, opts ) {
 	const alreadyOpen = await showsDay( page, date );
 	const before = alreadyOpen ? null : await mealSignature( page );
 
-	if ( ! ( await openDay( page, date ) ) ) {
+	if ( ! ( await openDay( page, date, opts.openTimeout || 12000 ) ) ) {
 		const heading = await currentHeading( page );
 
 		log( `  ${ date }: nie udało się otworzyć${ heading ? ` (karta dnia pokazuje „${ heading }”)` : '' }, pomijam.` );
@@ -735,19 +727,36 @@ async function collectSingleDay( page, date, opts ) {
  * potrafi wiec nie dojsc. Dlatego po nieudanej probie wysylamy zdarzenie click
  * programowo, co omija zarowno przechwytywanie zdarzen, jak i uchwyty przeciagania.
  */
-async function openDay( page, date ) {
+/**
+ * Otwiera dzien w kalendarzu.
+ *
+ * Caly zestaw prob miesci sie w jednym budzecie czasu. Bez niego dzien, ktorego
+ * panel otworzyc nie da (a takich jest sporo, odkad zagladamy do wszystkich dni
+ * z okna, nie tylko do zamowionych), zjadal ponad pol minuty - trzy selektory
+ * razy dwa oczekiwania.
+ */
+async function openDay( page, date, timeout = 12000 ) {
 	// Dzien moze byc juz otwarty - wtedy nie ma w co klikac.
 	if ( await showsDay( page, date ) ) {
 		return true;
 	}
 
+	const deadline = Date.now() + timeout;
 	const handles = [
 		`#calendar-day-${ date }`,
 		`[data-date="${ date }"] li.day`,
 		`[data-date="${ date }"]`,
 	];
 
+	// Ile czekac na reakcje panelu przy jednej probie - nigdy dluzej, niz
+	// zostalo z calego budzetu.
+	const slice = () => Math.max( 600, Math.min( 4000, deadline - Date.now() ) );
+
 	for ( const selector of handles ) {
+		if ( Date.now() >= deadline ) {
+			break;
+		}
+
 		const target = page.locator( selector ).first();
 
 		if ( 0 === ( await target.count().catch( () => 0 ) ) ) {
@@ -757,19 +766,19 @@ async function openDay( page, date ) {
 		// Kalendarz to poziomy suwak. Dni z prawej strony bywaja poza widokiem,
 		// a panel dociaga ich jadlospis dopiero, gdy kafelek trafi na ekran -
 		// klikniecie programowe samo z siebie niczego nie przewija.
-		await target.scrollIntoViewIfNeeded( { timeout: 3000 } ).catch( () => {} );
+		await target.scrollIntoViewIfNeeded( { timeout: 2000 } ).catch( () => {} );
 		await page.waitForTimeout( 200 );
 
-		await target.click( { timeout: 3000 } ).catch( () => {} );
+		await target.click( { timeout: 2000 } ).catch( () => {} );
 
-		if ( await waitUntilShown( page, date, 4000 ) ) {
+		if ( await waitUntilShown( page, date, slice() ) ) {
 			return true;
 		}
 
 		// Klikniecie programowe - ostatnia i najskuteczniejsza proba.
 		await target.dispatchEvent( 'click' ).catch( () => {} );
 
-		if ( await waitUntilShown( page, date, 4000 ) ) {
+		if ( await waitUntilShown( page, date, slice() ) ) {
 			return true;
 		}
 	}

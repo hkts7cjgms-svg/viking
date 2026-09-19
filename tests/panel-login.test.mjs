@@ -70,7 +70,7 @@ const sessionPath = join( dir, 'session.json' );
 			sessionPath,
 			log: ( message ) => logs.push( message ),
 		},
-		( page ) => collectDays( page, { from: '2026-09-01', to: '2026-09-30' } )
+		( page ) => collectDays( page, { mealsTimeout: 2500, openTimeout: 3000, from: '2026-09-01', to: '2026-09-30' } )
 	);
 
 	same( 1, state.logins, 'pierwsze uruchomienie loguje się raz' );
@@ -109,7 +109,7 @@ const sessionPath = join( dir, 'session.json' );
 			sessionPath,
 			log: ( message ) => logs.push( message ),
 		},
-		( page ) => collectDays( page, { from: '2026-09-01', to: '2026-09-30' } )
+		( page ) => collectDays( page, { mealsTimeout: 2500, openTimeout: 3000, from: '2026-09-01', to: '2026-09-30' } )
 	);
 
 	same( 1, state.logins, 'drugie uruchomienie NIE loguje się ponownie' );
@@ -124,7 +124,7 @@ const sessionPath = join( dir, 'session.json' );
 {
 	const days = await withPanel(
 		{ panelUrl: url, user: credentials.user, password: credentials.password, sessionPath },
-		( page ) => collectDays( page, { from: '2026-09-02', to: '2026-09-02', details: true } )
+		( page ) => collectDays( page, { mealsTimeout: 2500, openTimeout: 3000, from: '2026-09-02', to: '2026-09-02', details: true } )
 	);
 
 	const lunch = days[ 0 ].meals.find( ( meal ) => 'obiad' === meal.slug );
@@ -158,7 +158,7 @@ const sessionPath = join( dir, 'session.json' );
 	try {
 		await withPanel(
 			{ panelUrl: url, user: credentials.user, password: 'zle-haslo', timeout: 8000 },
-			( page ) => collectDays( page, {} )
+			( page ) => collectDays( page, { mealsTimeout: 2500, openTimeout: 3000 } )
 		);
 	} catch ( caught ) {
 		error = caught;
@@ -185,7 +185,7 @@ const sessionPath = join( dir, 'session.json' );
 				password: credentials.password,
 				timeout: 15000,
 			},
-			( page ) => collectDays( page, {} )
+			( page ) => collectDays( page, { mealsTimeout: 2500, openTimeout: 3000 } )
 		);
 
 		ok( days.length > 0, 'baner bez przycisku zgody nie blokuje logowania' );
@@ -202,7 +202,7 @@ const sessionPath = join( dir, 'session.json' );
 {
 	const bounded = await withPanel(
 		{ panelUrl: url, user: credentials.user, password: credentials.password, timeout: 10000 },
-		( page ) => collectDays( page, { from: '2026-09-01', to: '2026-09-03' } )
+		( page ) => collectDays( page, { mealsTimeout: 2500, openTimeout: 3000, from: '2026-09-01', to: '2026-09-03' } )
 	);
 
 	same( 1, bounded.length, 'górna granica zakresu odcina późniejsze dni' );
@@ -210,7 +210,7 @@ const sessionPath = join( dir, 'session.json' );
 
 	const unbounded = await withPanel(
 		{ panelUrl: url, user: credentials.user, password: credentials.password, timeout: 10000 },
-		( page ) => collectDays( page, { from: '2026-09-01' } )
+		( page ) => collectDays( page, { mealsTimeout: 2500, openTimeout: 3000, from: '2026-09-01' } )
 	);
 
 	// Bez granicy siegamy takze do nastepnego miesiaca - stad trzy dni, nie dwa.
@@ -234,7 +234,7 @@ const sessionPath = join( dir, 'session.json' );
 				password: credentials.password,
 				timeout: 15000,
 			},
-			( page ) => collectDays( page, { from: '2026-09-01', maxMonths: 1 } )
+			( page ) => collectDays( page, { mealsTimeout: 2500, openTimeout: 3000, from: '2026-09-01', maxMonths: 1 } )
 		);
 
 		same( 2, days.length, 'dni zbierane mimo nieruchomej klasy is-selected' );
@@ -267,7 +267,7 @@ const sessionPath = join( dir, 'session.json' );
 				password: credentials.password,
 				timeout: 20000,
 			},
-			( page ) => collectDays( page, { from: '2026-09-01', maxMonths: 1 } )
+			( page ) => collectDays( page, { mealsTimeout: 2500, openTimeout: 3000, from: '2026-09-01', maxMonths: 1 } )
 		);
 
 		same( 2, days.length, 'przechwycone kliknięcie nie blokuje odczytu' );
@@ -294,7 +294,7 @@ const sessionPath = join( dir, 'session.json' );
 				password: credentials.password,
 				timeout: 20000,
 			},
-			( page ) => collectDays( page, { from: '2026-09-01', mealsTimeout: 2500, maxMonths: 1 } )
+			( page ) => collectDays( page, { from: '2026-09-01', mealsTimeout: 2500, openTimeout: 3000, maxMonths: 1 } )
 		);
 
 		same( 2, days.length, 'ponowna próba ratuje dzień, który nie doczytał się za pierwszym razem' );
@@ -343,7 +343,7 @@ const sessionPath = join( dir, 'session.json' );
 {
 	const days = await withPanel(
 		{ panelUrl: url, user: credentials.user, password: credentials.password, timeout: 20000 },
-		( page ) => collectDays( page, { from: '2026-09-01', details: false } )
+		( page ) => collectDays( page, { mealsTimeout: 2500, openTimeout: 3000, from: '2026-09-01', details: false } )
 	);
 
 	same( 3, days.length, 'dni z następnego miesiąca też są pobierane' );
@@ -352,6 +352,33 @@ const sessionPath = join( dir, 'session.json' );
 		days[ 2 ].meals[ 0 ].description.includes( 'Zupa dyniowa' ),
 		'jadłospis z następnego miesiąca jest prawdziwy, nie skopiowany'
 	);
+}
+
+// --- dzien bez etykiety, ale z jadlospisem -------------------------------
+// Etykieta "Zobacz"/"Edytuj" znaczy tylko tyle, ze na ten dzien jest zamowiona
+// dostawa. Menu panel pokazuje takze dla dni bez zamowienia - i wlasnie te dni
+// wczesniej w ogole nie byly otwierane.
+{
+	const notes = [];
+	const days = await withPanel(
+		{ panelUrl: url, user: credentials.user, password: credentials.password, timeout: 20000 },
+		( page ) =>
+			collectDays( page, {
+				today: '2026-09-01',
+				from: '2026-09-01',
+				to: '2026-09-04',
+				details: false,
+				mealsTimeout: 3000,
+					openTimeout: 3000,
+				log: ( message ) => notes.push( message ),
+			} )
+	);
+
+	ok(
+		notes.some( ( note ) => note.includes( 'do sprawdzenia 4' ) ),
+		'otwieramy każdy dzień z okna, nie tylko te z zamówieniem'
+	);
+	same( 2, days.length, 'dni bez opublikowanego menu nie trafiają do wyniku' );
 }
 
 // --- koniec miesiaca bez etykiet -----------------------------------------
@@ -372,6 +399,7 @@ const sessionPath = join( dir, 'session.json' );
 					from: '2026-09-20',
 					details: false,
 					mealsTimeout: 3000,
+					openTimeout: 3000,
 					log: ( message ) => notes.push( message ),
 				} )
 		);
@@ -407,12 +435,13 @@ const sessionPath = join( dir, 'session.json' );
 					from: '2026-09-01',
 					details: false,
 					mealsTimeout: 3000,
+					openTimeout: 3000,
 					log: ( message ) => notes.push( message ),
 				} )
 		);
 
 		ok(
-			notes.some( ( note ) => note.includes( 'nie sięga poza' ) ),
+			notes.some( ( note ) => note.includes( 'Okno jadłospisu kończy się' ) ),
 			'log tłumaczy, dlaczego kalendarz nie został przewinięty'
 		);
 		ok(
@@ -442,7 +471,7 @@ const sessionPath = join( dir, 'session.json' );
 				timeout: 8000,
 				log: ( message ) => messages.push( message ),
 			},
-			( page ) => collectDays( page, { log: ( message ) => messages.push( message ) } )
+			( page ) => collectDays( page, { mealsTimeout: 2500, openTimeout: 3000, log: ( message ) => messages.push( message ) } )
 		);
 
 		same( 0, days.length, 'brak zamówienia daje pustą listę dni' );

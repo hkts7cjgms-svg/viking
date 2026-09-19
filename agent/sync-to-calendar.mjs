@@ -165,6 +165,8 @@ async function main() {
 				// Na ile dni do przodu panel publikuje jadlospis. Po tym poznajemy,
 				// czy trzeba przewinac kalendarz na kolejny miesiac.
 				menuWindow: Number( process.env.KV_MENU_WINDOW || 15 ),
+				// Ile czasu dac panelowi na otwarcie jednego dnia, zanim go pominiemy.
+				openTimeout: Number( process.env.KV_OPEN_TIMEOUT || 12000 ),
 			} )
 	);
 
