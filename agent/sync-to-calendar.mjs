@@ -167,6 +167,8 @@ async function main() {
 				menuWindow: Number( process.env.KV_MENU_WINDOW || 15 ),
 				// Ile czasu dac panelowi na otwarcie jednego dnia, zanim go pominiemy.
 				openTimeout: Number( process.env.KV_OPEN_TIMEOUT || 12000 ),
+				// Ile czekac na posilki dnia bez zamowienia - tam pusto jest normą.
+				emptyTimeout: Number( process.env.KV_EMPTY_TIMEOUT || 5000 ),
 			} )
 	);
 

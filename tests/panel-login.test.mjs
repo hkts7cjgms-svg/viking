@@ -379,6 +379,14 @@ const sessionPath = join( dir, 'session.json' );
 		'otwieramy każdy dzień z okna, nie tylko te z zamówieniem'
 	);
 	same( 2, days.length, 'dni bez opublikowanego menu nie trafiają do wyniku' );
+	ok(
+		! notes.some( ( note ) => note.includes( '2026-09-01: lista się nie odświeżyła' ) ),
+		'na dniu bez zamówienia nie ponawiamy próby — pusta lista to poprawna odpowiedź'
+	);
+	ok(
+		notes.some( ( note ) => note.includes( '2026-09-01' ) ),
+		'taki dzień i tak jest odnotowany w logu'
+	);
 }
 
 // --- koniec miesiaca bez etykiet -----------------------------------------

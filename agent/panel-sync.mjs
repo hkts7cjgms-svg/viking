@@ -571,10 +571,14 @@ export async function collectDays( page, opts = {} ) {
 				`${ labelled ? ` (z zamówieniem: ${ labelled })` : '' }.`
 		);
 
-		for ( const { date } of wanted ) {
+		for ( const { date, label, isActive } of wanted ) {
 			processed.add( date );
 
-			const day = await collectSingleDay( page, date, { ...opts, log } );
+			// Dzien z zamowieniem POWINIEN miec posilki, wiec pusta lista znaczy
+			// tam "nie zdazylo sie doczytac". Na dniu bez zamowienia pusta lista
+			// jest poprawna odpowiedzia i nie ma na co czekac.
+			const hasOrder = '' !== label || isActive;
+			const day = await collectSingleDay( page, date, { ...opts, log, hasOrder } );
 
 			if ( 'pominiety' === day ) {
 				skipped.push( date );
@@ -641,7 +645,11 @@ async function collectSingleDay( page, date, opts ) {
 		return null;
 	}
 
-	const mealsTimeout = opts.mealsTimeout || 15000;
+	const hasOrder = false !== opts.hasOrder;
+	const fullTimeout = opts.mealsTimeout || 15000;
+	// Na dzien bez zamowienia czekamy krocej: gdy posilki jednak sa, oczekiwanie
+	// konczy sie z chwila ich pojawienia, a gdy ich nie ma - nie tracimy minut.
+	const mealsTimeout = hasOrder ? fullTimeout : Math.min( fullTimeout, opts.emptyTimeout || 5000 );
 
 	if ( alreadyOpen ) {
 		// Dzien moze byc otwarty, a posilki wciaz sie doczytywac.
@@ -651,9 +659,11 @@ async function collectSingleDay( page, date, opts ) {
 
 		// Jedna ponowna proba: panel bywa wolniejszy przy dalszych dniach,
 		// a przeoczony dzien to strata calego jadlospisu z tej daty.
-		// Probujemy takze przy pustej liscie - dzien z etykieta powinien miec
+		// Probujemy takze przy pustej liscie - dzien z zamowieniem powinien miec
 		// posilki, wiec pustka rownie dobrze moze byc nieudanym odczytem.
-		if ( 'swieze' !== freshness ) {
+		// Bez zamowienia pustka jest spodziewana i ponawianie tylko kosztuje czas;
+		// nieodswiezona lista i tak zostanie nizej odrzucona.
+		if ( 'swieze' !== freshness && hasOrder ) {
 			log( `  ${ date }: lista się nie odświeżyła, próbuję jeszcze raz…` );
 
 			const tile = page.locator( `#calendar-day-${ date }` ).first();
