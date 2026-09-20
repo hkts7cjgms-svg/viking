@@ -49,6 +49,12 @@ if [[ ! -f "$PROJECT/agent/.env" ]]; then
 	exit 1
 fi
 
+# Lepiej zlapac to tu niz o 7:30 w logu jako MODULE_NOT_FOUND.
+if [[ ! -f "$PROJECT/$SCRIPT" ]]; then
+	echo "Nie ma $PROJECT/$SCRIPT — uruchom instalator z katalogu projektu." >&2
+	exit 1
+fi
+
 mkdir -p "$HOME/Library/LaunchAgents"
 
 # Wczesniejsza wersja moze dzialac - wyladowujemy ja, zanim nadpiszemy plik.
@@ -63,7 +69,7 @@ cat > "$PLIST" <<PLIST_END
 	<key>ProgramArguments</key>
 	<array>
 		<string>$NODE</string>
-		<string>$SCRIPT</string>
+		<string>$PROJECT/$SCRIPT</string>
 	</array>
 	<key>WorkingDirectory</key><string>$PROJECT</string>
 	<key>EnvironmentVariables</key>
@@ -91,6 +97,8 @@ echo
 echo "  Projekt:  $PROJECT"
 echo "  Node:     $NODE"
 echo "  Log:      $PROJECT/$LOG"
+echo
+echo "  Skrypt:   $PROJECT/$SCRIPT"
 echo
 echo "Uruchom teraz, nie czekając do rana:  launchctl start $LABEL"
 echo "Podgląd działania:                    tail -f $PROJECT/$LOG"
